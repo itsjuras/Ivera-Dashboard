@@ -25,7 +25,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 bg-white border-r border-neutral-200 flex flex-col">
+    <aside className="relative z-10 w-60 bg-white/80 border-r border-neutral-200/60 flex flex-col">
       <div className="px-6 py-5 border-b border-neutral-200">
         <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
           ivera

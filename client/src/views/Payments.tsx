@@ -55,7 +55,7 @@ export default function Payments() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+      <div className="bg-white/70 rounded-xl border border-neutral-200/60 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left">

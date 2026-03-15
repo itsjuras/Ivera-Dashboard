@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import WaveBackground from '../components/WaveBackground'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -26,8 +27,9 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex flex-col">
-      <nav className="px-8 py-5">
+    <div className="relative min-h-screen flex flex-col">
+      <WaveBackground backgroundColor="#fafafa" strokeColor="#e5e5e5" />
+      <nav className="relative z-10 px-8 py-5">
         <Link
           to="/"
           className="text-xl font-semibold tracking-tight text-neutral-900"
@@ -36,7 +38,7 @@ export default function Login() {
         </Link>
       </nav>
 
-      <div className="flex-1 flex items-center justify-center px-4">
+      <div className="relative z-10 flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <h2 className="text-2xl font-semibold text-neutral-900 text-center mb-1">
             Welcome back

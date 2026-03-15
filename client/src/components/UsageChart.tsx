@@ -20,7 +20,7 @@ const data = [
 
 export default function UsageChart() {
   return (
-    <div className="bg-white rounded-xl border border-neutral-200 p-5">
+    <div className="bg-white/70 rounded-xl border border-neutral-200/60 p-5">
       <h3 className="text-sm font-medium text-neutral-500 mb-4">
         Call &amp; SMS Volume
       </h3>
