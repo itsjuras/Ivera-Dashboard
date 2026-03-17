@@ -11,7 +11,7 @@ const products = [
     icon: Phone,
     title: 'AI Receptionist',
     description:
-      'Answers every call 24/7, books appointments directly into your calendar, handles cancellations, and answers FAQs — without you picking up the phone.',
+      'Answers every call around the clock. Books and reschedules appointments, answers questions about your services and pricing, and sends confirmations to clients — all without you picking up the phone.',
     cta: 'Learn more',
     href: '#receptionist',
   },
@@ -21,7 +21,7 @@ const products = [
     icon: Mail,
     title: 'AI Sales Agent',
     description:
-      'Researches prospects, writes personalised outreach emails, handles replies, and books calls with warm leads — fully automated.',
+      'Finds your ideal customers, writes a personalised email for each one, and follows up automatically until they book. Handles replies, schedules meetings, and keeps your pipeline full — you only talk to warm leads.',
     cta: 'Get started',
     href: 'https://sales.ivera.ca/onboard',
   },
@@ -31,7 +31,7 @@ const products = [
     icon: BarChart3,
     title: 'AI Business Consultant',
     description:
-      'Connects to your CRM, Stripe, and analytics — then answers business questions in plain language, surfaces growth opportunities, and delivers weekly strategic briefings.',
+      'Ask any business question in plain English and get a clear, data-backed answer. Tracks revenue, churn, pipeline health, and marketing performance. Delivers a weekly briefing with exactly where to focus next.',
     cta: 'Try demo',
     href: 'https://ivera-business-consultant-dv41csio7.vercel.app',
   },
@@ -40,24 +40,24 @@ const products = [
 const receptionistSteps = [
   {
     number: '01',
-    title: 'Customer calls your number',
-    description: 'Ivera picks up instantly — day, night, or during a busy appointment.',
+    title: 'A customer calls your business',
+    description: 'Ivera picks up instantly, any time of day or night.',
   },
   {
     number: '02',
-    title: 'AI handles the conversation',
+    title: 'The call is handled end to end',
     description:
-      'Books appointments, answers questions about your services, handles cancellations — all in natural voice.',
+      'Answers their questions, checks your availability, and books them into your calendar.',
   },
   {
     number: '03',
-    title: 'Booking added to your calendar',
-    description: 'Syncs directly with Cal.com. You get a notification. No missed opportunities.',
+    title: 'You get notified',
+    description: 'A new booking appears in your calendar with all the details. The client receives a confirmation.',
   },
   {
     number: '04',
-    title: 'You focus on your clients',
-    description: 'No interruptions, no missed calls, no extra staff needed.',
+    title: 'Nothing falls through the cracks',
+    description: 'Every call is answered, every lead is captured, every appointment is booked.',
   },
 ]
 
@@ -88,26 +88,26 @@ const receptionistPricing = [
 const salesSteps = [
   {
     number: '01',
-    title: 'We configure your target audience',
-    description: 'You tell us your service, your ideal customer, and your location. We build the search profile.',
+    title: 'Define your ideal customer',
+    description: 'Tell us who you want to reach — industry, role, location. We handle the rest.',
   },
   {
     number: '02',
-    title: 'AI finds and qualifies leads',
+    title: 'Prospects are found and qualified',
     description:
-      'Runs Tuesday–Thursday. Discovers prospects with recent growth signals — hiring, funding, launches — enriches with LinkedIn data, and scores each lead.',
+      'The agent identifies high-intent leads showing real buying signals and builds a vetted list for you.',
   },
   {
     number: '03',
-    title: 'Role-targeted, personalised email sent',
+    title: 'Personalised outreach is sent',
     description:
-      'Claude AI writes a unique plain-text email for every prospect — different angle for a CEO vs. an ops director, opening with a specific hook about their business.',
+      'Each prospect receives a unique email written specifically for them — not a template, not a mail merge.',
   },
   {
     number: '04',
-    title: '6-touch follow-up sequence runs automatically',
+    title: 'Follow-ups run until they book',
     description:
-      'Interested replies get a booking link. "Maybe later" leads get a 6-email sequence over 53 days. Touch 2 includes an SMS. You only talk to warm leads.',
+      'Interested leads get a link to schedule. Everyone else gets a multi-step follow-up sequence. You only speak to people ready to talk.',
   },
 ]
 
@@ -138,26 +138,26 @@ const salesPricing = [
 const consultantSteps = [
   {
     number: '01',
-    title: 'Connect your data sources',
-    description: 'We integrate HubSpot, Stripe, and Google Analytics 4 in one setup session. Your data stays secure and private.',
+    title: 'Link your tools once',
+    description: 'Connect your CRM, payments, and analytics in a single setup. Your data stays private and secure.',
   },
   {
     number: '02',
-    title: 'Ask any business question',
+    title: 'Ask questions, get answers',
     description:
-      'Type questions like "Why did revenue drop this month?" or "Which customers are at risk of churning?" — and get a direct, data-backed answer in seconds.',
+      '"Why did revenue drop?" "Which customers might churn?" Ask any question and get a clear, data-backed response in seconds.',
   },
   {
     number: '03',
-    title: 'Surface hidden opportunities',
+    title: 'Problems found before they cost you',
     description:
-      'The AI proactively spots stale deals, churn signals, underperforming ads, and expansion opportunities — before they become problems or missed revenue.',
+      'Stale deals, at-risk accounts, underperforming campaigns — surfaced automatically so you can act before it hits your bottom line.',
   },
   {
     number: '04',
-    title: 'Get a weekly strategic briefing',
+    title: 'A weekly briefing in your inbox',
     description:
-      'Every week, a plain-English summary lands in your inbox: what changed, what matters, and exactly what to focus on next.',
+      'Every Monday, a summary of what changed, what matters, and exactly where to focus next.',
   },
 ]
 
@@ -349,14 +349,9 @@ export default function Landing() {
         <WaveBackground backgroundColor="#171717" strokeColor="#2a2a2a" />
         <div className="relative z-10 px-8 max-w-6xl mx-auto w-full">
           <div className="max-w-xl">
-            <p className="text-xs tracking-widest text-neutral-500 mb-6 uppercase">Canadian AI Agency · Powered by Claude AI</p>
             <h2 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-wide text-white leading-[1.2] uppercase">
-              AI Automation<br />for Small Business.
+              AI Automation<br />for Business.
             </h2>
-            <p className="mt-5 text-xs text-neutral-400 tracking-widest leading-relaxed max-w-sm uppercase">
-              Answering calls. Closing deals. Analysing your data.<br />
-              All on autopilot, all day.
-            </p>
             <div className="mt-10 flex items-center gap-4">
               <a
                 href={CAL_URL}
@@ -426,10 +421,10 @@ export default function Landing() {
           <div className="mb-16">
             <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">AI Receptionist</p>
             <h3 className="text-2xl sm:text-3xl font-semibold text-black tracking-wide uppercase">
-              Your phone, handled.<br />24 hours a day.
+              Your clients, handled.<br />24 hours a day.
             </h3>
             <p className="mt-4 text-xs text-neutral-600 tracking-widest max-w-sm leading-relaxed uppercase">
-              Set up in under a day. Your existing number, your calendar — the AI does the rest.
+              Set up in under a day.
             </p>
           </div>
           <Steps steps={receptionistSteps} />
@@ -475,7 +470,7 @@ export default function Landing() {
               Outbound sales,<br />on autopilot.
             </h3>
             <p className="mt-4 text-xs text-neutral-600 tracking-widest max-w-md leading-relaxed uppercase">
-              The agent finds your ideal customers, writes a role-targeted email for each one, runs a 6-touch follow-up sequence, and books demos — while you focus on closing.
+              Cold outreach that books warm meetings.
             </p>
           </div>
           <Steps steps={salesSteps} />
@@ -515,10 +510,10 @@ export default function Landing() {
           <div className="mb-16">
             <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">AI Business Consultant</p>
             <h3 className="text-2xl sm:text-3xl font-semibold text-black tracking-wide uppercase">
-              Your data, turned into<br />a clear growth plan.
+              Know what's working.<br />Know what's not.
             </h3>
             <p className="mt-4 text-xs text-neutral-600 tracking-widest max-w-md leading-relaxed uppercase">
-              Connect your CRM, Stripe, and analytics once. Ask questions in plain English, get instant answers — like a senior analyst available 24/7.
+              Ask any question about your business and get a real answer, backed by your data.
             </p>
           </div>
           <Steps steps={consultantSteps} />
@@ -621,9 +616,8 @@ export default function Landing() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-neutral-800 pt-6 flex items-center justify-between">
+          <div className="border-t border-neutral-800 pt-6 text-center">
             <p className="text-xs text-neutral-600 uppercase">&copy; {new Date().getFullYear()} Ivera. All rights reserved.</p>
-            <p className="text-xs text-neutral-600 tracking-wider uppercase">Powered by Claude AI</p>
           </div>
         </div>
       </footer>
