@@ -114,7 +114,7 @@ const salesPricing = [
   {
     plan: 'Basic',
     price: '99',
-    desc: 'For small businesses just starting with outbound.',
+    desc: 'For businesses just starting with outbound.',
     features: ['~25 new prospects/week', 'AI-written personalised emails', 'Automated reply handling', '1 target audience', 'Weekly email report', 'Email support'],
     featured: false,
   },
@@ -288,7 +288,7 @@ export default function Landing() {
           <div className="max-w-xl">
             <p className="text-xs tracking-widest text-neutral-400 mb-6">Canadian AI Agency · Powered by Claude AI</p>
             <h2 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-wide text-neutral-900 leading-[1.2]">
-              AI Automation<br />for Small Business.
+              AI Automation<br />for Business.
             </h2>
             <p className="mt-5 text-xs text-neutral-500 tracking-widest leading-relaxed max-w-sm">
               Answering calls. Closing deals. Analysing your data.<br />
@@ -474,10 +474,12 @@ export default function Landing() {
               ))}
             </div>
             <a
-              href={CAL_URL}
+              href="https://ivera-business-consultant.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block px-6 py-3 bg-neutral-900 text-white text-xs font-medium tracking-widest rounded-lg hover:bg-neutral-800 transition-colors"
             >
-              Book a demo →
+              See demo →
             </a>
           </div>
         </div>
@@ -524,7 +526,7 @@ export default function Landing() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 mb-10">
             <div className="col-span-2 sm:col-span-1">
               <p className="text-sm font-semibold tracking-widest text-white mb-3">Ivera</p>
-              <p className="text-xs text-neutral-500 tracking-wider leading-relaxed">AI automation for Canadian small businesses.</p>
+              <p className="text-xs text-neutral-500 tracking-wider leading-relaxed">AI automation for Canadian businesses.</p>
             </div>
             <div>
               <p className="text-xs tracking-widest text-neutral-400 mb-4">Products</p>
