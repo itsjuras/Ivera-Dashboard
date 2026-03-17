@@ -25,14 +25,14 @@ const products = [
     href: 'https://sales.ivera.ca/onboard',
   },
   {
-    tag: 'New',
-    tagColor: 'bg-violet-100 text-violet-700',
+    tag: 'Live now',
+    tagColor: 'bg-emerald-100 text-emerald-700',
     icon: BarChart3,
     title: 'AI Business Consultant',
     description:
       'Connects to your CRM, Stripe, and analytics — then answers business questions in plain language, surfaces growth opportunities, and delivers weekly strategic briefings.',
-    cta: 'Learn more',
-    href: '#consultant',
+    cta: 'Try demo',
+    href: 'https://ivera-business-consultant-dv41csio7.vercel.app',
   },
 ]
 
