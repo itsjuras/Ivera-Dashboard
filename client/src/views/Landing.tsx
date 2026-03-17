@@ -26,14 +26,14 @@ const products = [
     href: 'https://sales.ivera.ca/onboard',
   },
   {
-    tag: 'New',
-    tagColor: 'bg-violet-100 text-violet-700',
+    tag: 'Live now',
+    tagColor: 'bg-emerald-100 text-emerald-700',
     icon: BarChart3,
     title: 'AI Business Consultant',
     description:
       'Connects to your CRM, Stripe, and analytics — then answers business questions in plain language, surfaces growth opportunities, and delivers weekly strategic briefings.',
-    cta: 'Learn more',
-    href: '#consultant',
+    cta: 'Try demo',
+    href: 'https://ivera-business-consultant-dv41csio7.vercel.app',
   },
 ]
 
@@ -115,7 +115,7 @@ const salesPricing = [
   {
     plan: 'Basic',
     price: '99',
-    desc: 'For small businesses just starting with outbound.',
+    desc: 'For businesses just starting with outbound.',
     features: ['~25 new prospects/week', 'AI-written personalised emails', 'Automated reply handling', '1 target audience', 'Weekly email report', 'Email support'],
     featured: false,
   },
@@ -537,10 +537,12 @@ export default function Landing() {
               ))}
             </div>
             <a
-              href={CAL_URL}
+              href="https://ivera-business-consultant.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block px-6 py-3 bg-neutral-900 text-white text-xs font-medium tracking-widest rounded-lg hover:bg-neutral-800 transition-colors uppercase"
             >
-              Book a demo →
+              See demo →
             </a>
           </div>
         </div>
