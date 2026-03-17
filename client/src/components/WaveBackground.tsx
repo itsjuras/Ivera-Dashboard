@@ -42,8 +42,22 @@ export default function WaveBackground({
   const boundingRef = useRef<DOMRect | null>(null)
   const pageOffsetY = useRef(0)
 
+  const visibleRef = useRef(false)
+
   useEffect(() => {
     if (!containerRef.current || !svgRef.current) return
+
+    // Only animate when visible on screen
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visibleRef.current = entry.isIntersecting
+        if (entry.isIntersecting && !rafRef.current) {
+          rafRef.current = requestAnimationFrame(tick)
+        }
+      },
+      { threshold: 0 }
+    )
+    observer.observe(containerRef.current)
 
     const setSize = () => {
       if (!containerRef.current || !svgRef.current) return
@@ -96,11 +110,13 @@ export default function WaveBackground({
       setLines()
     }
 
-    const updateMousePosition = (x: number, y: number) => {
+    const updateMousePosition = (clientX: number, clientY: number) => {
       if (!boundingRef.current) return
+      // Recalculate bounding rect to account for scroll
+      const rect = containerRef.current!.getBoundingClientRect()
       const mouse = mouseRef.current
-      mouse.x = x - boundingRef.current.left
-      mouse.y = y - boundingRef.current.top + window.scrollY
+      mouse.x = clientX - rect.left
+      mouse.y = clientY - rect.top
 
       if (!mouse.set) {
         mouse.sx = mouse.x
@@ -111,7 +127,7 @@ export default function WaveBackground({
       }
     }
 
-    const onMouseMove = (e: MouseEvent) => updateMousePosition(e.pageX, e.pageY)
+    const onMouseMove = (e: MouseEvent) => updateMousePosition(e.clientX, e.clientY)
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
       updateMousePosition(e.touches[0].clientX, e.touches[0].clientY)
@@ -178,6 +194,11 @@ export default function WaveBackground({
     }
 
     const tick = (time: number) => {
+      if (!visibleRef.current) {
+        rafRef.current = null
+        return
+      }
+
       const mouse = mouseRef.current
       mouse.sx += (mouse.x - mouse.sx) * 0.1
       mouse.sy += (mouse.y - mouse.sy) * 0.1
@@ -207,9 +228,11 @@ export default function WaveBackground({
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
       window.removeEventListener('resize', onResize)
       window.removeEventListener('mousemove', onMouseMove)
       container?.removeEventListener('touchmove', onTouchMove)
+      observer.disconnect()
     }
   }, [strokeColor])
 
