@@ -324,6 +324,7 @@ export default function Landing() {
             <a href="#receptionist" className="opacity-60 hover:opacity-100 transition-opacity">Receptionist</a>
             <a href="#sales" className="opacity-60 hover:opacity-100 transition-opacity">Sales Agent</a>
             <a href="#consultant" className="opacity-60 hover:opacity-100 transition-opacity">Consultant</a>
+            <a href="/about" className="opacity-60 hover:opacity-100 transition-opacity">About</a>
           </div>
           <a
             href={CAL_URL}
@@ -600,6 +601,7 @@ export default function Landing() {
             <div>
               <p className="text-xs tracking-widest text-neutral-400 mb-4 uppercase">Company</p>
               <ul className="space-y-2">
+                <li><a href="/about" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">About us</a></li>
                 <li><a href="mailto:sales@ivera.ca" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">Contact</a></li>
                 <li><a href={CAL_URL} className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">Book a demo</a></li>
                 <li><a href="tel:+17789079707" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">+1 778 907 9707</a></li>

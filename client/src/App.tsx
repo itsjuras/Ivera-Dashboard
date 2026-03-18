@@ -9,6 +9,7 @@ import Onboard from './views/Onboard'
 import ReceptionistLayout from './views/ReceptionistLayout'
 import SalesDashboard from './views/SalesDashboard'
 import ConsultantDashboard from './views/ConsultantDashboard'
+import About from './views/About'
 
 const CAL_URL = 'https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent'
 
@@ -96,6 +97,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/about" element={<About />} />
           <Route path="/onboard" element={<Onboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
