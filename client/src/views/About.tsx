@@ -12,11 +12,18 @@ export default function About() {
           <a href="/" className="text-xl font-semibold tracking-widest uppercase text-white">
             Ivera
           </a>
+          <div className="hidden sm:flex items-center gap-6 text-xs tracking-widest uppercase text-white">
+            <a href="/#receptionist" className="opacity-60 hover:opacity-100 transition-opacity">Receptionist</a>
+            <a href="/#sales" className="opacity-60 hover:opacity-100 transition-opacity">Sales Agent</a>
+            <a href="/#consultant" className="opacity-60 hover:opacity-100 transition-opacity">Consultant</a>
+            <a href="/about" className="opacity-100">About</a>
+            <a href="/portal" className="opacity-60 hover:opacity-100 transition-opacity">Dashboard</a>
+          </div>
           <a
-            href="/"
+            href="https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent"
             className="px-4 py-1.5 text-xs font-medium tracking-widest rounded-lg uppercase border border-white text-white hover:opacity-60 transition-opacity"
           >
-            Back to home
+            Book a demo
           </a>
         </div>
       </nav>

@@ -325,6 +325,7 @@ export default function Landing() {
             <a href="#sales" className="opacity-60 hover:opacity-100 transition-opacity">Sales Agent</a>
             <a href="#consultant" className="opacity-60 hover:opacity-100 transition-opacity">Consultant</a>
             <a href="/about" className="opacity-60 hover:opacity-100 transition-opacity">About</a>
+            <a href="/portal" className="opacity-60 hover:opacity-100 transition-opacity">Dashboard</a>
           </div>
           <a
             href={CAL_URL}

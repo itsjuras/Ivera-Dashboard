@@ -1,7 +1,10 @@
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import ProtectedRoute from './components/ProtectedRoute'
 import WaveBackground from './components/WaveBackground'
+import MockDataPopup from './components/MockDataBanner'
+import { fetchStats } from './services/api'
 import Landing from './views/Landing'
 import Login from './views/Login'
 import Signup from './views/Signup'
@@ -10,6 +13,7 @@ import ReceptionistLayout from './views/ReceptionistLayout'
 import SalesDashboard from './views/SalesDashboard'
 import ConsultantDashboard from './views/ConsultantDashboard'
 import About from './views/About'
+import Portal from './views/Portal'
 
 const CAL_URL = 'https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent'
 
@@ -23,6 +27,12 @@ function DashboardShell() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [showPopup, setShowPopup] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    fetchStats().catch(() => setShowPopup(true))
+  }, [user])
 
   async function handleSignOut() {
     await signOut()
@@ -32,6 +42,7 @@ function DashboardShell() {
   return (
     <div className="relative h-screen flex flex-col">
       <WaveBackground backgroundColor="#fafafa" strokeColor="#e5e5e5" />
+      {showPopup && <MockDataPopup onClose={() => setShowPopup(false)} />}
 
       {/* Fixed nav — z-50, identical to landing page */}
       <nav className="fixed top-0 left-0 right-0 z-50 mix-blend-difference">
@@ -98,6 +109,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/about" element={<About />} />
+          <Route path="/portal" element={<Portal />} />
           <Route path="/onboard" element={<Onboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
