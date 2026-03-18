@@ -1,4 +1,7 @@
+import { useState, useEffect } from 'react'
 import { Clock } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
+import { fetchBookings, type Booking as ApiBooking } from '../services/api'
 import PageHeader from '../components/PageHeader'
 
 interface Booking {
@@ -13,7 +16,7 @@ interface Booking {
   source: string
 }
 
-const bookings: Booking[] = [
+const mockBookings: Booking[] = [
   { id: '1', clientName: 'Sarah Johnson', serviceType: 'Consultation', date: 'Mar 11, 2026', time: '2:00 PM', duration: 30, amount: 150, status: 'confirmed', source: 'phone' },
   { id: '2', clientName: 'Mike Chen', serviceType: 'Follow-up', date: 'Mar 11, 2026', time: '3:30 PM', duration: 45, amount: 200, status: 'scheduled', source: 'phone' },
   { id: '3', clientName: 'Emily Davis', serviceType: 'Initial Session', date: 'Mar 12, 2026', time: '10:00 AM', duration: 60, amount: 300, status: 'confirmed', source: 'phone' },
@@ -23,7 +26,22 @@ const bookings: Booking[] = [
   { id: '7', clientName: 'Anna Lee', serviceType: 'Initial Session', date: 'Mar 9, 2026', time: '4:00 PM', duration: 60, amount: 300, status: 'cancelled', source: 'phone' },
 ]
 
-const statusStyles: Record<Booking['status'], string> = {
+function mapApiBooking(b: ApiBooking): Booking {
+  const dt = new Date(b.bookingTime)
+  return {
+    id: b.id,
+    clientName: b.clientName,
+    serviceType: b.serviceType,
+    date: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+    duration: b.duration,
+    amount: b.amount,
+    status: b.status as Booking['status'],
+    source: b.source,
+  }
+}
+
+const statusStyles: Record<string, string> = {
   confirmed: 'bg-neutral-900 text-white',
   scheduled: 'bg-neutral-100 text-neutral-600',
   completed: 'bg-neutral-200 text-neutral-700',
@@ -31,6 +49,19 @@ const statusStyles: Record<Booking['status'], string> = {
 }
 
 export default function Bookings() {
+  const { user } = useAuth()
+  const [bookings, setBookings] = useState<Booking[]>(mockBookings)
+
+  useEffect(() => {
+    if (!user) {
+      setBookings(mockBookings)
+      return
+    }
+    fetchBookings()
+      .then((data) => setBookings(data.map(mapApiBooking)))
+      .catch(() => setBookings(mockBookings))
+  }, [user])
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <PageHeader
@@ -76,7 +107,7 @@ export default function Bookings() {
                   ${booking.amount}
                 </td>
                 <td className="px-5 py-4">
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusStyles[booking.status]}`}>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusStyles[booking.status] || statusStyles.scheduled}`}>
                     {booking.status}
                   </span>
                 </td>

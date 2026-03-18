@@ -1,6 +1,9 @@
+import { useState, useEffect } from 'react'
 import PageHeader from '../components/PageHeader'
 import StatCard from '../components/StatCard'
 import { DollarSign, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
+import { fetchPayments, type Payment as ApiPayment } from '../services/api'
 
 interface Payment {
   id: string
@@ -12,7 +15,7 @@ interface Payment {
   cardLast4: string
 }
 
-const payments: Payment[] = [
+const mockPayments: Payment[] = [
   { id: '1', clientName: 'Sarah Johnson', amount: 150, status: 'succeeded', date: 'Mar 11, 2026', cardBrand: 'Visa', cardLast4: '4242' },
   { id: '2', clientName: 'Mike Chen', amount: 200, status: 'pending', date: 'Mar 11, 2026', cardBrand: 'Mastercard', cardLast4: '8888' },
   { id: '3', clientName: 'James Wilson', amount: 150, status: 'succeeded', date: 'Mar 10, 2026', cardBrand: 'Visa', cardLast4: '1234' },
@@ -21,13 +24,55 @@ const payments: Payment[] = [
   { id: '6', clientName: 'Tom Rivera', amount: 150, status: 'succeeded', date: 'Mar 9, 2026', cardBrand: 'Mastercard', cardLast4: '5555' },
 ]
 
-const statusConfig: Record<Payment['status'], { style: string; icon: typeof CheckCircle }> = {
+function mapApiPayment(p: ApiPayment): Payment {
+  const dt = new Date(p.createdAt)
+  return {
+    id: p.id,
+    clientName: p.clientName,
+    amount: p.amount,
+    status: p.status as Payment['status'],
+    date: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    cardBrand: p.cardBrand || '—',
+    cardLast4: p.cardLast4 || '——',
+  }
+}
+
+const statusConfig: Record<string, { style: string; icon: typeof CheckCircle }> = {
   succeeded: { style: 'text-neutral-900', icon: CheckCircle },
   pending: { style: 'text-neutral-500', icon: Clock },
   failed: { style: 'text-neutral-400', icon: AlertCircle },
 }
 
+function summarize(payments: Payment[]) {
+  let collected = 0
+  let pending = 0
+  let pendingCount = 0
+  let failed = 0
+  let failedCount = 0
+  for (const p of payments) {
+    if (p.status === 'succeeded') collected += p.amount
+    if (p.status === 'pending') { pending += p.amount; pendingCount++ }
+    if (p.status === 'failed') { failed += p.amount; failedCount++ }
+  }
+  return { collected, pending, pendingCount, failed, failedCount }
+}
+
 export default function Payments() {
+  const { user } = useAuth()
+  const [payments, setPayments] = useState<Payment[]>(mockPayments)
+
+  useEffect(() => {
+    if (!user) {
+      setPayments(mockPayments)
+      return
+    }
+    fetchPayments()
+      .then((data) => setPayments(data.map(mapApiPayment)))
+      .catch(() => setPayments(mockPayments))
+  }, [user])
+
+  const { collected, pending, pendingCount, failed, failedCount } = summarize(payments)
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <PageHeader
@@ -38,19 +83,19 @@ export default function Payments() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard
           label="Collected This Month"
-          value="$34,200"
+          value={`$${collected.toLocaleString()}`}
           icon={DollarSign}
         />
         <StatCard
           label="Pending"
-          value="$1,400"
-          subtitle="3 payments"
+          value={`$${pending.toLocaleString()}`}
+          subtitle={`${pendingCount} payment${pendingCount !== 1 ? 's' : ''}`}
           icon={Clock}
         />
         <StatCard
           label="Failed"
-          value="$200"
-          subtitle="1 payment"
+          value={`$${failed.toLocaleString()}`}
+          subtitle={`${failedCount} payment${failedCount !== 1 ? 's' : ''}`}
           icon={AlertCircle}
         />
       </div>
@@ -68,7 +113,7 @@ export default function Payments() {
           </thead>
           <tbody>
             {payments.map((payment) => {
-              const config = statusConfig[payment.status]
+              const config = statusConfig[payment.status] || statusConfig.pending
               const StatusIcon = config.icon
               return (
                 <tr

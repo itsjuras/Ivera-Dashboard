@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from 'react-router-dom'
-import { AuthProvider } from './hooks/useAuth'
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './hooks/useAuth'
+import ProtectedRoute from './components/ProtectedRoute'
 import WaveBackground from './components/WaveBackground'
 import Landing from './views/Landing'
 import Login from './views/Login'
@@ -19,6 +20,13 @@ const agents = [
 
 function DashboardShell() {
   const { pathname } = useLocation()
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/')
+  }
 
   return (
     <div className="relative h-screen flex flex-col">
@@ -41,12 +49,21 @@ function DashboardShell() {
               </NavLink>
             ))}
           </div>
-          <a
-            href={CAL_URL}
-            className="px-4 py-1.5 text-xs font-medium tracking-widest rounded-lg uppercase border border-white text-white hover:opacity-60 transition-opacity"
-          >
-            Book a demo
-          </a>
+          {user ? (
+            <button
+              onClick={handleSignOut}
+              className="px-4 py-1.5 text-xs font-medium tracking-widest rounded-lg uppercase border border-white text-white hover:opacity-60 transition-opacity"
+            >
+              Sign out
+            </button>
+          ) : (
+            <NavLink
+              to="/login"
+              className="px-4 py-1.5 text-xs font-medium tracking-widest rounded-lg uppercase border border-white text-white hover:opacity-60 transition-opacity"
+            >
+              Sign in
+            </NavLink>
+          )}
         </div>
       </nav>
 
