@@ -33,7 +33,7 @@ const products = [
     description:
       'Ask any business question in plain English and get a clear, data-backed answer. Tracks revenue, churn, pipeline health, and marketing performance. Delivers a weekly briefing with exactly where to focus next.',
     cta: 'Try demo',
-    href: 'https://ivera-business-consultant-dv41csio7.vercel.app',
+    href: '/dashboard/consultant',
   },
 ]
 
@@ -532,9 +532,7 @@ export default function Landing() {
               ))}
             </div>
             <a
-              href="https://ivera-business-consultant.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/dashboard/consultant"
               className="inline-block px-6 py-3 bg-neutral-900 text-white text-xs font-medium tracking-widest rounded-lg hover:bg-neutral-800 transition-colors uppercase"
             >
               See demo →
