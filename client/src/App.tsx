@@ -10,6 +10,7 @@ import Dashboard from './views/Dashboard'
 import Bookings from './views/Bookings'
 import Clients from './views/Clients'
 import Payments from './views/Payments'
+import Onboard from './views/Onboard'
 
 function DashboardLayout() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/onboard" element={<Onboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route

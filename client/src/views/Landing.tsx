@@ -23,7 +23,7 @@ const products = [
     description:
       'Finds your ideal customers, writes a personalised email for each one, and follows up automatically until they book. Handles replies, schedules meetings, and keeps your pipeline full — you only talk to warm leads.',
     cta: 'Get started',
-    href: 'https://sales.ivera.ca/onboard',
+    href: '/onboard',
   },
   {
     tag: 'Live now',
@@ -486,7 +486,7 @@ export default function Landing() {
               ))}
             </div>
             <a
-              href="https://sales.ivera.ca/onboard"
+              href="/onboard"
               className="inline-block px-6 py-3 bg-neutral-900 text-white text-xs font-medium tracking-widest rounded-lg hover:bg-neutral-800 transition-colors uppercase"
             >
               Get started →
@@ -611,7 +611,7 @@ export default function Landing() {
               <p className="text-xs tracking-widest text-neutral-400 mb-4 uppercase">Try it live</p>
               <ul className="space-y-2">
                 <li><a href="tel:+17788007577" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">AI Receptionist: +1 778 800 7577</a></li>
-                <li><a href="https://sales.ivera.ca/onboard" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">AI Sales Agent: Get started</a></li>
+                <li><a href="/onboard" className="text-xs text-neutral-500 tracking-wider hover:text-neutral-300 transition-colors uppercase">AI Sales Agent: Get started</a></li>
                 <li><span className="text-xs text-neutral-500 tracking-wider uppercase">Vancouver, BC</span></li>
               </ul>
             </div>
