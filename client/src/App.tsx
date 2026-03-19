@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
-import ProtectedRoute from './components/ProtectedRoute'
 import WaveBackground from './components/WaveBackground'
 import MockDataPopup from './components/MockDataBanner'
 import { fetchStats } from './services/api'
@@ -14,8 +13,6 @@ import SalesDashboard from './views/SalesDashboard'
 import ConsultantDashboard from './views/ConsultantDashboard'
 import About from './views/About'
 import Portal from './views/Portal'
-
-const CAL_URL = 'https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent'
 
 const agents = [
   { to: '/dashboard/receptionist', label: 'Receptionist' },
