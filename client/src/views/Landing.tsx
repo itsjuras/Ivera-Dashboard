@@ -387,18 +387,13 @@ export default function Landing() {
             </h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {products.map(({ tag, tagColor, icon: Icon, title, description, cta, href }) => (
+            {products.map(({ icon: Icon, title, description, cta, href }) => (
               <div
                 key={title}
                 className="bg-white/70 border border-neutral-200/60 rounded-2xl p-8 hover:border-neutral-300 transition-colors flex flex-col gap-5"
               >
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center">
-                    <Icon size={22} className="text-neutral-600" strokeWidth={1.5} />
-                  </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full tracking-widest font-medium uppercase ${tagColor}`}>
-                    {tag}
-                  </span>
+                <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center">
+                  <Icon size={22} className="text-neutral-600" strokeWidth={1.5} />
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-black mb-2 tracking-wider uppercase">{title}</h4>
@@ -437,7 +432,7 @@ export default function Landing() {
               Call this number to experience our AI receptionist live. Ask it to book an appointment, check availability, or ask about pricing.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-8">
-              {['Books real appointments via Cal.com', 'Natural conversation, not a phone tree', 'Handles interruptions and questions', 'Available 24/7, zero hold time'].map((f) => (
+              {['Books real appointments via Cal.com', 'Natural conversation, not a phone tree', 'Handles interruptions and questions', 'Available 24/7, zero hold time', 'Outbound follow-up calls to warm leads via Twilio voice AI', 'Syncs with Google Calendar and Apple Calendar', 'SMS confirmation sent to client after every booking', 'Custom call script trained on your services and pricing'].map((f) => (
                 <div key={f} className="flex items-center gap-2">
                   <Check size={13} className="text-emerald-500 shrink-0" />
                   <span className="text-xs text-neutral-600 tracking-wider uppercase">{f}</span>
@@ -480,7 +475,7 @@ export default function Landing() {
             <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">Live now</p>
             <p className="text-xl font-semibold text-neutral-900 tracking-wide mb-3 uppercase">AI Sales Agent</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-8">
-              {['Trigger-based targeting — recent hires, funding, launches', 'LinkedIn enrichment — decision-maker name + title', 'Role-specific email angles — CEO vs ops vs marketing', '6-touch follow-up sequence + SMS on touch 2'].map((f) => (
+              {['Trigger-based targeting — recent hires, funding, launches', 'LinkedIn enrichment — decision-maker name + title', 'Role-specific email angles — CEO vs ops vs marketing', '6-touch follow-up sequence + SMS on touch 2', 'Claude scores each lead 1–10 — only ≥ 7 get contacted', 'Inbound replies auto-classified: interested / later / info / not interested', 'Cal.com webhook auto-updates lead to booked and cancels pending follow-ups', 'Weekly report: open rates, reply rates, and booked demos per client'].map((f) => (
                 <div key={f} className="flex items-center gap-2">
                   <Check size={13} className="text-emerald-500 shrink-0" />
                   <span className="text-xs text-neutral-600 tracking-wider uppercase">{f}</span>
@@ -526,7 +521,7 @@ export default function Landing() {
               The agent cross-references Stripe churn data, HubSpot pipeline activity, and GA4 traffic trends — then gives you a prioritised answer with one clear action to take today.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-8">
-              {['CRM pipeline health — stale deals, close rate trends', 'Revenue insights — MRR, churn, expansion, NRR', 'Marketing ROI — ROAS, funnel drop-off, top pages', 'Weekly strategic briefing delivered to your inbox'].map((f) => (
+              {['CRM pipeline health — stale deals, close rate trends', 'Revenue insights — MRR, churn, expansion, NRR', 'Marketing ROI — ROAS, funnel drop-off, top pages', 'Weekly strategic briefing delivered to your inbox', 'Connects to Stripe, HubSpot CRM, and GA4 — one agent across all sources', 'Identifies churn risk by account — not just aggregate percentages', 'Responses streamed in real time — answers appear instantly', 'Every reply cites exact figures and ends with one clear recommended action'].map((f) => (
                 <div key={f} className="flex items-center gap-2">
                   <Check size={13} className="text-emerald-500 shrink-0" />
                   <span className="text-xs text-neutral-600 tracking-wider uppercase">{f}</span>
