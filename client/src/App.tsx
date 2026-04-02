@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import WaveBackground from './components/WaveBackground'
 import MockDataPopup from './components/MockDataBanner'
 import { fetchStats } from './services/api'
+import ChatWidget from './components/ChatWidget'
 import Landing from './views/Landing'
 import Login from './views/Login'
 import Signup from './views/Signup'
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/dashboard/*" element={<DashboardShell />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ChatWidget />
       </BrowserRouter>
     </AuthProvider>
   )
