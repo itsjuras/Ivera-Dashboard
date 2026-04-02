@@ -84,9 +84,9 @@ export default function ChatWidget() {
                   background: m.role === 'user' ? '#0A0F1E' : '#f3f4f6',
                   color: m.role === 'user' ? 'white' : '#1f2937',
                   fontSize: 13, lineHeight: 1.5
-                }}>
-                  {m.content}
-                </div>
+                }}
+                  dangerouslySetInnerHTML={{ __html: m.content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#0A0F1E;font-weight:600;text-decoration:underline;">$1</a>') }}
+                />
               </div>
             ))}
             {loading && (
