@@ -66,7 +66,7 @@ export default function ChatWidget() {
           {/* Header */}
           <div style={{ background: '#0A0F1E', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✦</div>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0A0F1E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✦</div>
               <div>
                 <div style={{ color: 'white', fontWeight: 600, fontSize: 13 }}>Ivera AI</div>
                 <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Always online</div>
@@ -81,7 +81,7 @@ export default function ChatWidget() {
               <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div style={{
                   maxWidth: '82%', padding: '8px 12px', borderRadius: m.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                  background: m.role === 'user' ? '#7C3AED' : '#f3f4f6',
+                  background: m.role === 'user' ? '#0A0F1E' : '#f3f4f6',
                   color: m.role === 'user' ? 'white' : '#1f2937',
                   fontSize: 13, lineHeight: 1.5
                 }}>
@@ -116,7 +116,7 @@ export default function ChatWidget() {
             <button
               onClick={send}
               disabled={loading || !input.trim()}
-              style={{ padding: '8px 14px', background: input.trim() && !loading ? '#7C3AED' : '#e5e7eb', color: input.trim() && !loading ? 'white' : '#9ca3af', border: 'none', borderRadius: 8, cursor: input.trim() && !loading ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, transition: 'background 0.15s' }}
+              style={{ padding: '8px 14px', background: input.trim() && !loading ? '#0A0F1E' : '#e5e7eb', color: input.trim() && !loading ? 'white' : '#9ca3af', border: 'none', borderRadius: 8, cursor: input.trim() && !loading ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, transition: 'background 0.15s' }}
             >
               ↑
             </button>
@@ -132,9 +132,9 @@ export default function ChatWidget() {
         onClick={() => setOpen(o => !o)}
         style={{
           width: 52, height: 52, borderRadius: '50%',
-          background: '#7C3AED',
+          background: '#0A0F1E',
           border: 'none', cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(124,58,237,0.45)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 22, color: 'white',
           transition: 'transform 0.2s, box-shadow 0.2s'
