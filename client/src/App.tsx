@@ -15,19 +15,38 @@ import SalesDashboard from './views/SalesDashboard'
 import ConsultantDashboard from './views/ConsultantDashboard'
 import About from './views/About'
 import Portal from './views/Portal'
+import AdminDashboard from './views/AdminDashboard'
 
-const agents = [
-  { to: '/dashboard/receptionist', label: 'Receptionist' },
-  { to: '/dashboard/sales', label: 'Sales Agent' },
-  { to: '/dashboard/consultant', label: 'Consultant' },
-  { to: '/dashboard/support', label: 'Support' },
-]
+// Registry of all products. Adding a new product = add one entry here.
+// The slug must match the slug in the `products` DB table.
+const PRODUCT_REGISTRY: Record<string, { label: string; path: string }> = {
+  receptionist: { label: 'Receptionist', path: '/dashboard/receptionist' },
+  sales:        { label: 'Sales Agent',  path: '/dashboard/sales' },
+  consultant:   { label: 'Consultant',   path: '/dashboard/consultant' },
+  support:      { label: 'Support',      path: '/dashboard/support' },
+}
+
+function NoProducts() {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center">
+        <p className="text-neutral-500 text-sm">No products assigned to your account yet.</p>
+        <p className="text-neutral-400 text-xs mt-1">Contact your Ivera administrator to get started.</p>
+      </div>
+    </div>
+  )
+}
 
 function DashboardShell() {
   const { pathname } = useLocation()
-  const { user, signOut } = useAuth()
+  const { user, role, products, signOut } = useAuth()
   const navigate = useNavigate()
   const [showPopup, setShowPopup] = useState(false)
+
+  // Build nav only from products this user has access to, in registry order
+  const accessibleAgents = Object.entries(PRODUCT_REGISTRY).flatMap(([slug, info]) =>
+    products.some((p) => p.productSlug === slug) ? [info] : [],
+  )
 
   useEffect(() => {
     if (!user) return
@@ -44,22 +63,30 @@ function DashboardShell() {
       <WaveBackground backgroundColor="#fafafa" strokeColor="#e5e5e5" />
       {showPopup && <MockDataPopup onClose={() => setShowPopup(false)} />}
 
-      {/* Fixed nav — z-50, identical to landing page */}
+      {/* Fixed nav */}
       <nav className="fixed top-0 left-0 right-0 z-50 mix-blend-difference">
         <div className="flex items-center justify-between px-8 py-4 max-w-6xl mx-auto">
           <a href="/" className="text-xl font-semibold tracking-widest uppercase text-white">
             Ivera
           </a>
           <div className="hidden sm:flex items-center gap-6 text-xs tracking-widest uppercase text-white">
-            {agents.map(({ to, label }) => (
+            {accessibleAgents.map(({ path, label }) => (
               <NavLink
-                key={to}
-                to={to}
-                className={`transition-opacity ${pathname.startsWith(to) ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                key={path}
+                to={path}
+                className={`transition-opacity ${pathname.startsWith(path) ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
               >
                 {label}
               </NavLink>
             ))}
+            {role === 'ivera_admin' && (
+              <NavLink
+                to="/dashboard/admin"
+                className={`transition-opacity ${pathname.startsWith('/dashboard/admin') ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+              >
+                Admin
+              </NavLink>
+            )}
           </div>
           {user ? (
             <button
@@ -79,7 +106,7 @@ function DashboardShell() {
         </div>
       </nav>
 
-      {/* Fixed fade overlay — z-40, identical to landing page */}
+      {/* Fixed fade overlay */}
       <div
         className="fixed top-0 left-0 right-0 z-40 pointer-events-none"
         style={{
@@ -88,15 +115,30 @@ function DashboardShell() {
         }}
       />
 
-      {/* Content — scrolls beneath the fixed nav + gradient */}
+      {/* Content */}
       <main className="relative z-10 flex-1 flex flex-col min-h-0 pt-14">
         <Routes>
           <Route path="/receptionist/*" element={<ReceptionistLayout />} />
           <Route path="/sales" element={<SalesDashboard />} />
           <Route path="/consultant" element={<ConsultantDashboard />} />
           <Route path="/support" element={<SupportDashboard />} />
-          <Route path="/" element={<Navigate to="/dashboard/receptionist" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard/receptionist" replace />} />
+          <Route path="/admin" element={role === 'ivera_admin' ? <AdminDashboard /> : <Navigate to="/" replace />} />
+          <Route
+            path="/"
+            element={
+              accessibleAgents.length > 0
+                ? <Navigate to={accessibleAgents[0].path} replace />
+                : <NoProducts />
+            }
+          />
+          <Route
+            path="*"
+            element={
+              accessibleAgents.length > 0
+                ? <Navigate to={accessibleAgents[0].path} replace />
+                : <NoProducts />
+            }
+          />
         </Routes>
       </main>
     </div>

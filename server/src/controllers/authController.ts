@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express'
+import type { AuthRequest } from '../middleware/requireAuth'
 import { findClientByPhone } from '../models/authModel'
+import { getUserRole, provisionIveraAdmin, provisionCustomer } from '../models/userModel'
 
-export async function verifyPhone(req: Request, res: Response) {
+export async function verifyPhone(req: Request, res: Response): Promise<void> {
   try {
     const { phone } = req.body
 
@@ -25,5 +27,37 @@ export async function verifyPhone(req: Request, res: Response) {
   } catch (err) {
     console.error('Phone verification failed:', err)
     res.status(500).json({ error: 'Verification failed' })
+  }
+}
+
+// POST /api/auth/post-signup
+// Called by the client immediately after Supabase creates the user account.
+// Idempotent — safe to call more than once.
+//
+// Logic:
+//   @ivera.ca email  →  ivera_admin role + all products on max plan
+//   any other email  →  customer role, no products (Ivera admin assigns later)
+export async function postSignup(req: Request, res: Response): Promise<void> {
+  const authReq = req as AuthRequest
+
+  try {
+    const existing = await getUserRole(authReq.userId)
+
+    if (existing) {
+      // Already provisioned — just return current role
+      res.json({ role: existing })
+      return
+    }
+
+    if (authReq.userEmail.endsWith('@ivera.ca')) {
+      await provisionIveraAdmin(authReq.userId)
+      res.json({ role: 'ivera_admin' })
+    } else {
+      await provisionCustomer(authReq.userId)
+      res.json({ role: 'customer' })
+    }
+  } catch (err) {
+    console.error('postSignup provisioning failed:', err)
+    res.status(500).json({ error: 'Failed to provision user' })
   }
 }
