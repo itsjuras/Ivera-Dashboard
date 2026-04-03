@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Phone, Mail, BarChart3, ChevronDown, Check } from 'lucide-react'
+import { Phone, Mail, BarChart3, MessageSquare, ChevronDown, Check } from 'lucide-react'
 import WaveBackground from '../components/WaveBackground'
 
 const CAL_URL = 'https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent'
@@ -34,6 +34,16 @@ const products = [
       'Ask any business question in plain English and get a clear, data-backed answer. Tracks revenue, churn, pipeline health, and marketing performance. Delivers a weekly briefing with exactly where to focus next.',
     cta: 'Try demo',
     href: '/dashboard/consultant',
+  },
+  {
+    tag: 'Live now',
+    tagColor: 'bg-emerald-100 text-emerald-700',
+    icon: MessageSquare,
+    title: 'AI Support Agent',
+    description:
+      'Handles every customer support email and chat automatically. Searches your knowledge base, drafts a reply instantly, and only escalates to a human when it truly needs to — so your team focuses on what matters.',
+    cta: 'Learn more',
+    href: '#support',
   },
 ]
 
@@ -158,6 +168,53 @@ const consultantSteps = [
     title: 'A weekly briefing in your inbox',
     description:
       'Every Monday, a summary of what changed, what matters, and exactly where to focus next.',
+  },
+]
+
+const supportSteps = [
+  {
+    number: '01',
+    title: 'A customer emails or chats with a question',
+    description: 'Emails arrive at your support address. Chat messages come in via the widget on your website.',
+  },
+  {
+    number: '02',
+    title: 'AI searches your knowledge base instantly',
+    description: 'The agent scans your KB — built from your website, docs, or any text you provide — for the best answer.',
+  },
+  {
+    number: '03',
+    title: 'Confident? Auto-replies in seconds',
+    description: 'High-confidence answers go straight to the customer. Low-confidence tickets escalate to your team via email and SMS.',
+  },
+  {
+    number: '04',
+    title: 'Everything logged in your support portal',
+    description: 'Every ticket, reply, and conversation is tracked. See resolution rates, response times, and what customers ask most.',
+  },
+]
+
+const supportPricing = [
+  {
+    plan: 'Basic',
+    price: '49',
+    desc: 'For small teams handling support manually today.',
+    features: ['Up to 500 tickets/month', 'Email support channel', 'AI knowledge base (50 articles)', 'Auto-resolution with confidence threshold', 'Escalation via email', 'Support portal', 'Email support'],
+    featured: false,
+  },
+  {
+    plan: 'Pro',
+    price: '149',
+    desc: 'For growing businesses that want support on autopilot.',
+    features: ['Unlimited tickets', 'Email + website chat widget', 'Unlimited KB articles', 'Auto-resolution + escalation', 'Escalation via email + SMS', 'Full ticket history & analytics', 'Priority support'],
+    featured: true,
+  },
+  {
+    plan: 'Enterprise',
+    price: '349',
+    desc: 'For teams that need custom workflows and SLAs.',
+    features: ['Unlimited tickets', 'Email + chat + custom channels', 'Unlimited KB articles', 'Custom confidence thresholds', 'Multi-agent escalation routing', 'SLA tracking & reporting', 'Dedicated account manager'],
+    featured: false,
   },
 ]
 
@@ -324,6 +381,7 @@ export default function Landing() {
             <a href="#receptionist" className="opacity-60 hover:opacity-100 transition-opacity">Receptionist</a>
             <a href="#sales" className="opacity-60 hover:opacity-100 transition-opacity">Sales Agent</a>
             <a href="#consultant" className="opacity-60 hover:opacity-100 transition-opacity">Consultant</a>
+            <a href="#support" className="opacity-60 hover:opacity-100 transition-opacity">Support</a>
             <a href="/about" className="opacity-60 hover:opacity-100 transition-opacity">About</a>
             <a href="/portal" className="opacity-60 hover:opacity-100 transition-opacity">Dashboard</a>
           </div>
@@ -383,10 +441,10 @@ export default function Landing() {
           <div className="mb-16">
             <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">Products</p>
             <h3 className="text-2xl sm:text-3xl font-semibold text-black tracking-wide uppercase">
-              Three agents.<br />One agency.
+              Four agents.<br />One agency.
             </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {products.map(({ icon: Icon, title, description, cta, href }) => (
               <div
                 key={title}
@@ -546,6 +604,58 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* AI Support Agent — How it works */}
+      <section ref={addSectionRef} data-dark="false" data-bg="#ffffff" id="support" className="relative min-h-screen flex items-center overflow-hidden">
+        <WaveBackground backgroundColor="#ffffff" strokeColor="#f0f0f0" />
+        <div className="relative z-10 max-w-4xl mx-auto px-8 py-32 w-full">
+          <div className="mb-16">
+            <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">AI Support Agent</p>
+            <h3 className="text-2xl sm:text-3xl font-semibold text-black tracking-wide uppercase">
+              Every customer<br />supported, instantly.
+            </h3>
+            <p className="mt-4 text-xs text-neutral-600 tracking-widest max-w-md leading-relaxed uppercase">
+              AI that reads, understands, and replies to your customers — automatically.
+            </p>
+          </div>
+          <Steps steps={supportSteps} />
+          <div className="mt-16 bg-neutral-50 border border-neutral-200/60 rounded-2xl p-8">
+            <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">Live now</p>
+            <p className="text-xl font-semibold text-neutral-900 tracking-wide mb-3 uppercase">AI Support Agent</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-8">
+              {[
+                'AI auto-resolves tickets using your knowledge base',
+                'Confidence threshold — only escalates when uncertain',
+                'Inbound email via your own support address',
+                'Live chat widget for your website',
+                'KB built from URLs, text, or PDFs',
+                'Ticket classification by category and urgency',
+                'Escalation via email + SMS when human needed',
+                'Full conversation history in your support portal',
+              ].map((f) => (
+                <div key={f} className="flex items-center gap-2">
+                  <Check size={13} className="text-emerald-500 shrink-0" />
+                  <span className="text-xs text-neutral-600 tracking-wider uppercase">{f}</span>
+                </div>
+              ))}
+            </div>
+            <a
+              href={CAL_URL}
+              className="inline-block px-6 py-3 bg-neutral-900 text-white text-xs font-medium tracking-widest rounded-lg hover:bg-neutral-800 transition-colors uppercase"
+            >
+              Book a demo →
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* AI Support Agent Pricing */}
+      <section ref={addSectionRef} data-dark="true" data-bg="#171717" className="relative min-h-screen flex items-center overflow-hidden">
+        <WaveBackground backgroundColor="#171717" strokeColor="#2a2a2a" />
+        <div className="relative z-10 w-full">
+          <PricingGrid dark tiers={supportPricing} setup="$299 one-time setup fee — knowledge base setup, email routing, and full onboarding." />
+        </div>
+      </section>
+
       {/* CTA Band */}
       <section ref={addSectionRef} data-dark="true" data-bg="#171717" className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
         <WaveBackground backgroundColor="#171717" strokeColor="#2a2a2a" />
@@ -584,7 +694,7 @@ export default function Landing() {
             <div>
               <p className="text-xs tracking-widest text-neutral-400 mb-4 uppercase">Products</p>
               <ul className="space-y-2">
-                {['#receptionist:AI Receptionist', '#sales:AI Sales Agent', '#consultant:AI Business Consultant'].map((item) => {
+                {['#receptionist:AI Receptionist', '#sales:AI Sales Agent', '#consultant:AI Business Consultant', '#support:AI Support Agent'].map((item) => {
                   const [href, label] = item.split(':')
                   return (
                     <li key={label}>
