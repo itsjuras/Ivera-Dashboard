@@ -6,6 +6,7 @@ import {
   assignProductToCustomer,
   updateCustomerProduct,
   removeCustomerProduct,
+  updateCustomerPhone,
   type CustomerSummary,
   type Plan,
   type UserProduct,
@@ -44,6 +45,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Phone edit state
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [phoneValue, setPhoneValue] = useState('')
+
   // Per-product edit state
   const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const [editState, setEditState] = useState<EditState>({ planId: 0, customPriceCad: '', customNotes: '' })
@@ -75,6 +80,27 @@ export default function AdminDashboard() {
     fetchCustomers()
       .then(setCustomers)
       .catch(() => setError('Failed to reload'))
+  }
+
+  // ── Edit phone ──────────────────────────────────────────────────────────
+
+  function startEditPhone() {
+    setPhoneValue(selected?.phone ?? '')
+    setEditingPhone(true)
+  }
+
+  async function savePhone() {
+    if (!selectedId) return
+    setSaving(true)
+    try {
+      await updateCustomerPhone(selectedId, phoneValue.trim() || null)
+      setEditingPhone(false)
+      reload()
+    } catch {
+      setError('Failed to update phone')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── Edit an existing product ────────────────────────────────────────────
@@ -181,7 +207,7 @@ export default function AdminDashboard() {
             customers.map((c) => (
               <button
                 key={c.userId}
-                onClick={() => { setSelectedId(c.userId); setAdding(false); setEditingSlug(null) }}
+                onClick={() => { setSelectedId(c.userId); setAdding(false); setEditingSlug(null); setEditingPhone(false) }}
                 className={`w-full flex items-center justify-between px-5 py-3 text-left transition-colors ${
                   selectedId === c.userId
                     ? 'bg-neutral-100 text-neutral-900'
@@ -221,7 +247,36 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-sm font-semibold text-neutral-900">{selected.email}</h2>
-                <p className="text-xs text-neutral-400 mt-0.5 tracking-widest uppercase">
+
+                {/* Phone — inline editable */}
+                {editingPhone ? (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <input
+                      type="tel"
+                      value={phoneValue}
+                      onChange={(e) => setPhoneValue(e.target.value)}
+                      placeholder="+1 (555) 123-4567"
+                      className="px-2 py-1 text-xs border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 w-44"
+                      autoFocus
+                    />
+                    <button onClick={savePhone} disabled={saving} className="text-neutral-500 hover:text-neutral-900 disabled:opacity-40">
+                      <Check size={13} />
+                    </button>
+                    <button onClick={() => setEditingPhone(false)} className="text-neutral-400 hover:text-neutral-600">
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={startEditPhone}
+                    className="flex items-center gap-1.5 mt-1 text-xs text-neutral-400 hover:text-neutral-700 transition-colors group"
+                  >
+                    <span>{selected.phone ?? 'Add phone'}</span>
+                    <Pencil size={11} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                )}
+
+                <p className="text-xs text-neutral-400 mt-1 tracking-widest uppercase">
                   {selected.products.length} active product{selected.products.length !== 1 ? 's' : ''}
                 </p>
               </div>

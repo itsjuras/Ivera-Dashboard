@@ -8,6 +8,7 @@ import {
   addProductToCustomer,
   updateCustomerProduct,
   removeProductFromCustomer,
+  updatePhone,
 } from '../controllers/userController'
 
 const router = Router()
@@ -25,5 +26,6 @@ router.get('/customers',                                   iveraAdmin, h(getCust
 router.post('/customers/:userId/products',                 iveraAdmin, h(addProductToCustomer))
 router.patch('/customers/:userId/products/:productSlug',   iveraAdmin, h(updateCustomerProduct))
 router.delete('/customers/:userId/products/:productSlug',  iveraAdmin, h(removeProductFromCustomer))
+router.patch('/customers/:userId/phone',                   iveraAdmin, h(updatePhone))
 
 export default router

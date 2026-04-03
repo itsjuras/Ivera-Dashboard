@@ -133,6 +133,7 @@ export interface Plan {
 export interface CustomerSummary {
   userId: string
   email: string
+  phone: string | null
   products: UserProduct[]
 }
 
@@ -204,4 +205,11 @@ export function removeCustomerProduct(
   productSlug: string,
 ): Promise<{ success: boolean }> {
   return authDelete(`/api/user/customers/${userId}/products/${productSlug}`)
+}
+
+export function updateCustomerPhone(
+  userId: string,
+  phone: string | null,
+): Promise<{ success: boolean }> {
+  return authPatch(`/api/user/customers/${userId}/phone`, { phone })
 }

@@ -24,6 +24,7 @@ export interface UserProduct {
 export interface CustomerSummary {
   userId: string
   email: string
+  phone: string | null
   products: UserProduct[]
 }
 
@@ -190,6 +191,13 @@ export async function deactivateProduct(userId: string, productSlug: string): Pr
   if (error) throw error
 }
 
+export async function updateCustomerPhone(userId: string, phone: string | null): Promise<void> {
+  const { error } = await supabase.auth.admin.updateUserById(userId, {
+    user_metadata: { phone: phone ?? '' },
+  })
+  if (error) throw error
+}
+
 export async function listCustomers(): Promise<CustomerSummary[]> {
   const { data: roles, error } = await supabase
     .from('user_roles')
@@ -205,6 +213,7 @@ export async function listCustomers(): Promise<CustomerSummary[]> {
       return {
         userId: row.user_id as string,
         email: authData.user?.email ?? '',
+        phone: (authData.user?.user_metadata?.phone as string) ?? null,
         products,
       }
     }),

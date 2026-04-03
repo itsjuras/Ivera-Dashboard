@@ -8,6 +8,7 @@ import {
   assignProduct,
   updateProduct,
   deactivateProduct,
+  updateCustomerPhone,
 } from '../models/userModel'
 
 // GET /api/user/me
@@ -94,6 +95,20 @@ export async function updateCustomerProduct(req: AuthRequest, res: Response): Pr
   } catch (err) {
     console.error('updateCustomerProduct failed:', err)
     res.status(500).json({ error: 'Failed to update product' })
+  }
+}
+
+// PATCH /api/user/customers/:userId/phone
+// Ivera admin only — sets or clears a customer's phone number
+export async function updatePhone(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.params.userId as string
+    const { phone } = req.body
+    await updateCustomerPhone(userId, phone ?? null)
+    res.json({ success: true })
+  } catch (err) {
+    console.error('updatePhone failed:', err)
+    res.status(500).json({ error: 'Failed to update phone' })
   }
 }
 
