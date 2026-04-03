@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Inbox, AlertTriangle, CheckCircle, BookOpen, Settings, RefreshCw, Send, Trash2, Plus, Globe, FileText } from 'lucide-react'
+import { MessageSquare, Inbox, BookOpen, Settings, RefreshCw, Send, Trash2, Plus, Globe, FileText } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const API = 'https://sales.ivera.ca'
