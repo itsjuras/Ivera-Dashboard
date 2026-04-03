@@ -7,6 +7,16 @@ interface Message {
   content: string
 }
 
+function getSessionToken(): string {
+  const key = 'ivera_chat_session'
+  let token = sessionStorage.getItem(key)
+  if (!token) {
+    token = crypto.randomUUID()
+    sessionStorage.setItem(key, token)
+  }
+  return token
+}
+
 export default function ChatWidget() {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
@@ -35,7 +45,9 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: messages.slice(-6)
+          history: messages.slice(-6),
+          sessionToken: getSessionToken(),
+          pageUrl: window.location.href
         })
       })
       const data = await res.json()
