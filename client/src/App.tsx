@@ -5,6 +5,7 @@ import WaveBackground from './components/WaveBackground'
 import MockDataPopup from './components/MockDataBanner'
 import { fetchStats } from './services/api'
 import ChatWidget from './components/ChatWidget'
+import SupportDashboard from './views/SupportDashboard'
 import Landing from './views/Landing'
 import Login from './views/Login'
 import Signup from './views/Signup'
@@ -19,6 +20,7 @@ const agents = [
   { to: '/dashboard/receptionist', label: 'Receptionist' },
   { to: '/dashboard/sales', label: 'Sales Agent' },
   { to: '/dashboard/consultant', label: 'Consultant' },
+  { to: '/dashboard/support', label: 'Support' },
 ]
 
 function DashboardShell() {
@@ -92,6 +94,7 @@ function DashboardShell() {
           <Route path="/receptionist/*" element={<ReceptionistLayout />} />
           <Route path="/sales" element={<SalesDashboard />} />
           <Route path="/consultant" element={<ConsultantDashboard />} />
+          <Route path="/support" element={<SupportDashboard />} />
           <Route path="/" element={<Navigate to="/dashboard/receptionist" replace />} />
           <Route path="*" element={<Navigate to="/dashboard/receptionist" replace />} />
         </Routes>
