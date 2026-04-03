@@ -1,13 +1,7 @@
 {
-  "buildCommand": "cd client && npm install && npm run build && cd ../server && npm install",
+  "buildCommand": "cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
-  "functions": {
-    "server/api/index.ts": {
-      "runtime": "@vercel/node@5"
-    }
-  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/server/api/index.ts" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
