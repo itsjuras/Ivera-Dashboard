@@ -130,10 +130,20 @@ export interface Plan {
   priceCad: number | null
 }
 
+export interface CustomerProfile {
+  firstName: string | null
+  lastName: string | null
+  companyName: string | null
+  twilioNumber: string | null
+}
+
 export interface CustomerSummary {
   userId: string
   email: string
   phone: string | null
+  role: 'ivera_admin' | 'customer'
+  memberSince: string
+  profile: CustomerProfile
   products: UserProduct[]
 }
 
@@ -212,4 +222,11 @@ export function updateCustomerPhone(
   phone: string | null,
 ): Promise<{ success: boolean }> {
   return authPatch(`/api/user/customers/${userId}/phone`, { phone })
+}
+
+export function upsertCustomerProfile(
+  userId: string,
+  profile: Partial<CustomerProfile>,
+): Promise<{ success: boolean }> {
+  return authPatch(`/api/user/customers/${userId}/profile`, profile)
 }

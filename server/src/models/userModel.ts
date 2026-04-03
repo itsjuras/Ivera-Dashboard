@@ -21,10 +21,20 @@ export interface UserProduct {
   active: boolean
 }
 
+export interface CustomerProfile {
+  firstName: string | null
+  lastName: string | null
+  companyName: string | null
+  twilioNumber: string | null
+}
+
 export interface CustomerSummary {
   userId: string
   email: string
   phone: string | null
+  role: Role
+  memberSince: string
+  profile: CustomerProfile
   products: UserProduct[]
 }
 
@@ -214,10 +224,47 @@ export async function listCustomers(): Promise<CustomerSummary[]> {
         userId: row.user_id as string,
         email: authData.user?.email ?? '',
         phone: (authData.user?.user_metadata?.phone as string) ?? null,
+        role: 'customer' as Role,
+        memberSince: authData.user?.created_at ?? '',
+        profile: await getCustomerProfile(row.user_id as string),
         products,
       }
     }),
   )
 
   return results
+}
+
+export async function getCustomerProfile(userId: string): Promise<CustomerProfile> {
+  const { data, error } = await supabase
+    .from('customer_profiles')
+    .select('first_name, last_name, company_name, twilio_number')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+
+  return {
+    firstName: (data?.first_name as string) ?? null,
+    lastName: (data?.last_name as string) ?? null,
+    companyName: (data?.company_name as string) ?? null,
+    twilioNumber: (data?.twilio_number as string) ?? null,
+  }
+}
+
+export async function upsertCustomerProfile(
+  userId: string,
+  profile: Partial<CustomerProfile>,
+): Promise<void> {
+  const patch: Record<string, unknown> = { user_id: userId }
+  if ('firstName'    in profile) patch.first_name    = profile.firstName ?? null
+  if ('lastName'     in profile) patch.last_name     = profile.lastName ?? null
+  if ('companyName'  in profile) patch.company_name  = profile.companyName ?? null
+  if ('twilioNumber' in profile) patch.twilio_number = profile.twilioNumber ?? null
+
+  const { error } = await supabase
+    .from('customer_profiles')
+    .upsert(patch, { onConflict: 'user_id' })
+
+  if (error) throw error
 }

@@ -9,6 +9,7 @@ import {
   updateProduct,
   deactivateProduct,
   updateCustomerPhone,
+  upsertCustomerProfile,
 } from '../models/userModel'
 
 // GET /api/user/me
@@ -95,6 +96,20 @@ export async function updateCustomerProduct(req: AuthRequest, res: Response): Pr
   } catch (err) {
     console.error('updateCustomerProduct failed:', err)
     res.status(500).json({ error: 'Failed to update product' })
+  }
+}
+
+// PATCH /api/user/customers/:userId/profile
+// Ivera admin only — upserts name, company, twilio number for a customer
+export async function upsertProfile(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.params.userId as string
+    const { firstName, lastName, companyName, twilioNumber } = req.body
+    await upsertCustomerProfile(userId, { firstName, lastName, companyName, twilioNumber })
+    res.json({ success: true })
+  } catch (err) {
+    console.error('upsertProfile failed:', err)
+    res.status(500).json({ error: 'Failed to update profile' })
   }
 }
 
