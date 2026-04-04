@@ -124,6 +124,7 @@ export default function SalesDashboard() {
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const campaigns = stats?.campaigns ?? []
+  const latestCampaignRun = campaigns[0] ?? null
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -138,15 +139,20 @@ export default function SalesDashboard() {
         <StatCard label="Meetings Booked" value={totals.booked} subtitle="All time" icon={CalendarCheck} />
         <StatCard label="Sent This Week" value={totals.weekEmailed} subtitle="Last 7 days" icon={MousePointerClick} />
         <StatCard label="Prospects in Pipeline" value={recentLeads.length} subtitle="Recent leads" icon={Users} />
-        <StatCard label="Active Campaigns" value={campaigns.length} subtitle="All time" icon={Mail} />
+        <StatCard
+          label="Campaign Runs"
+          value={campaigns.length}
+          subtitle={latestCampaignRun ? `Latest ${timeAgo(latestCampaignRun.created_at)}` : 'No runs yet'}
+          icon={Mail}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Campaigns */}
+        {/* Campaign runs */}
         <div className="bg-white/70 rounded-xl border border-neutral-200/60 p-6">
-          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Campaigns</h3>
+          <h3 className="text-sm font-semibold text-neutral-900 mb-4">Recent Campaign Runs</h3>
           {campaigns.length === 0 ? (
-            <p className="text-xs text-neutral-400 py-4 text-center">No campaigns yet.</p>
+            <p className="text-xs text-neutral-400 py-4 text-center">No campaign runs yet.</p>
           ) : (
             <div className="space-y-3">
               {campaigns.map((c) => (
@@ -157,8 +163,8 @@ export default function SalesDashboard() {
                       Started {timeAgo(c.created_at)}
                     </p>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full tracking-widest font-medium uppercase shrink-0 ml-3 ${statusColors.active}`}>
-                    active
+                  <span className={`text-xs px-2.5 py-1 rounded-full tracking-widest font-medium uppercase shrink-0 ml-3 ${statusColors.completed}`}>
+                    run
                   </span>
                 </div>
               ))}
