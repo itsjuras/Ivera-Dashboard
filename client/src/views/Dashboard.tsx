@@ -16,14 +16,14 @@ import UsageChart from '../components/UsageChart'
 import UpcomingBookings from '../components/UpcomingBookings'
 import RecentActivity from '../components/RecentActivity'
 
-const mockStats: DashboardStats = {
-  activeClients: 48,
-  leadsConverted: 127,
-  totalRevenue: 34200,
-  callsHandled: 210,
-  totalBookings: 89,
-  upcomingBookings: 12,
-  smsSent: 145,
+const emptyStats: DashboardStats = {
+  activeClients: 0,
+  leadsConverted: 0,
+  totalRevenue: 0,
+  callsHandled: 0,
+  totalBookings: 0,
+  upcomingBookings: 0,
+  smsSent: 0,
 }
 
 function formatCurrency(n: number): string {
@@ -32,17 +32,22 @@ function formatCurrency(n: number): string {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const [stats, setStats] = useState<DashboardStats>(mockStats)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
 
   useEffect(() => {
-    if (!user) {
-      setStats(mockStats)
-      return
-    }
+    if (!user) return
     fetchStats()
       .then(setStats)
-      .catch(() => setStats(mockStats))
+      .catch(() => setStats(emptyStats))
   }, [user])
+
+  if (!stats) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex justify-center pt-24">
+        <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -55,7 +60,7 @@ export default function Dashboard() {
         <StatCard
           label="Active Clients"
           value={stats.activeClients}
-          subtitle={user ? 'Current' : '3 added this week'}
+          subtitle="Current"
           icon={Users}
         />
         <StatCard

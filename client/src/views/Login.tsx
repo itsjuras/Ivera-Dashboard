@@ -24,7 +24,7 @@ export default function Login() {
     if (error) {
       setError(error)
     } else {
-      navigate('/dashboard/receptionist')
+      navigate('/dashboard')
     }
   }
 

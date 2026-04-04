@@ -11,8 +11,8 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
   const { signUp } = useAuth()
-  const navigate = useNavigate()
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -28,8 +28,34 @@ export default function Signup() {
     if (error) {
       setError(error)
     } else {
-      navigate('/dashboard')
+      setConfirmed(true)
     }
+  }
+
+  if (confirmed) {
+    return (
+      <div className="relative min-h-screen flex flex-col">
+        <WaveBackground backgroundColor="#fafafa" strokeColor="#e5e5e5" />
+        <nav className="relative z-10 px-8 py-5">
+          <Link to="/" className="text-xl font-semibold tracking-tight text-neutral-900">
+            ivera
+          </Link>
+        </nav>
+        <div className="relative z-10 flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-sm text-center">
+            <div className="text-4xl mb-4">✉️</div>
+            <h2 className="text-2xl font-semibold text-neutral-900 mb-2">Check your email</h2>
+            <p className="text-sm text-neutral-500 mb-6">
+              We sent a confirmation link to <strong>{email}</strong>.<br />
+              Click it to activate your account.
+            </p>
+            <Link to="/login" className="text-sm text-neutral-900 font-medium hover:underline">
+              Back to sign in
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -39,7 +39,7 @@ function NoProducts() {
 
 function DashboardShell() {
   const { pathname } = useLocation()
-  const { user, role, products, signOut } = useAuth()
+  const { user, role, products, loading, signOut } = useAuth()
   const navigate = useNavigate()
   const [showPopup, setShowPopup] = useState(false)
 
@@ -52,6 +52,15 @@ function DashboardShell() {
     if (!user) return
     fetchStats().catch(() => setShowPopup(true))
   }, [user])
+
+  // Show spinner while auth + profile are loading to avoid flash of "no products"
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-neutral-50">
+        <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -126,17 +135,21 @@ function DashboardShell() {
           <Route
             path="/"
             element={
-              accessibleAgents.length > 0
-                ? <Navigate to={accessibleAgents[0].path} replace />
-                : <NoProducts />
+              role === 'ivera_admin'
+                ? <Navigate to="/dashboard/admin" replace />
+                : accessibleAgents.length > 0
+                  ? <Navigate to={accessibleAgents[0].path} replace />
+                  : <NoProducts />
             }
           />
           <Route
             path="*"
             element={
-              accessibleAgents.length > 0
-                ? <Navigate to={accessibleAgents[0].path} replace />
-                : <NoProducts />
+              role === 'ivera_admin'
+                ? <Navigate to="/dashboard/admin" replace />
+                : accessibleAgents.length > 0
+                  ? <Navigate to={accessibleAgents[0].path} replace />
+                  : <NoProducts />
             }
           />
         </Routes>
@@ -145,12 +158,20 @@ function DashboardShell() {
   )
 }
 
+// Redirects authenticated users landing on "/" (e.g. after email confirmation) to /dashboard
+function RootRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (user) return <Navigate to="/dashboard" replace />
+  return <Landing />
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<RootRoute />} />
           <Route path="/about" element={<About />} />
           <Route path="/portal" element={<Portal />} />
           <Route path="/onboard" element={<Onboard />} />
