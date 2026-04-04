@@ -12,7 +12,29 @@ dotenv.config()
 
 const app = express()
 
-app.use(cors())
+const allowedOrigins = [
+  'https://ivera.ca',
+  'https://www.ivera.ca',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:4000',
+]
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, curl, Postman, etc.)
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS: origin ${origin} not allowed`))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
+
+// Ensure OPTIONS preflight is handled for all routes
+app.options('*', cors())
+
 app.use(express.json())
 
 app.use('/api/dashboard', dashboardRoutes)
