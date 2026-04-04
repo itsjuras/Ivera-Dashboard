@@ -16,15 +16,6 @@ interface Booking {
   source: string
 }
 
-const mockBookings: Booking[] = [
-  { id: '1', clientName: 'Sarah Johnson', serviceType: 'Consultation', date: 'Mar 11, 2026', time: '2:00 PM', duration: 30, amount: 150, status: 'confirmed', source: 'phone' },
-  { id: '2', clientName: 'Mike Chen', serviceType: 'Follow-up', date: 'Mar 11, 2026', time: '3:30 PM', duration: 45, amount: 200, status: 'scheduled', source: 'phone' },
-  { id: '3', clientName: 'Emily Davis', serviceType: 'Initial Session', date: 'Mar 12, 2026', time: '10:00 AM', duration: 60, amount: 300, status: 'confirmed', source: 'phone' },
-  { id: '4', clientName: 'James Wilson', serviceType: 'Consultation', date: 'Mar 12, 2026', time: '1:00 PM', duration: 30, amount: 150, status: 'scheduled', source: 'phone' },
-  { id: '5', clientName: 'Lisa Park', serviceType: 'Follow-up', date: 'Mar 13, 2026', time: '9:00 AM', duration: 45, amount: 200, status: 'scheduled', source: 'phone' },
-  { id: '6', clientName: 'Tom Rivera', serviceType: 'Consultation', date: 'Mar 10, 2026', time: '11:00 AM', duration: 30, amount: 150, status: 'completed', source: 'phone' },
-  { id: '7', clientName: 'Anna Lee', serviceType: 'Initial Session', date: 'Mar 9, 2026', time: '4:00 PM', duration: 60, amount: 300, status: 'cancelled', source: 'phone' },
-]
 
 function mapApiBooking(b: ApiBooking): Booking {
   const dt = new Date(b.bookingTime)
@@ -50,17 +41,22 @@ const statusStyles: Record<string, string> = {
 
 export default function Bookings() {
   const { user } = useAuth()
-  const [bookings, setBookings] = useState<Booking[]>(mockBookings)
+  const [bookings, setBookings] = useState<Booking[] | null>(null)
 
   useEffect(() => {
-    if (!user) {
-      setBookings(mockBookings)
-      return
-    }
+    if (!user) return
     fetchBookings()
       .then((data) => setBookings(data.map(mapApiBooking)))
-      .catch(() => setBookings(mockBookings))
+      .catch(() => setBookings([]))
   }, [user])
+
+  if (bookings === null) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex justify-center pt-24">
+        <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -70,6 +66,9 @@ export default function Bookings() {
       />
 
       <div className="bg-white/70 rounded-xl border border-neutral-200/60 overflow-hidden">
+        {bookings.length === 0 ? (
+          <p className="px-5 py-10 text-sm text-neutral-400 text-center">No bookings yet.</p>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left">
@@ -115,6 +114,7 @@ export default function Bookings() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   )

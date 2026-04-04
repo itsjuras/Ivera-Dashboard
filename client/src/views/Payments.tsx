@@ -15,14 +15,6 @@ interface Payment {
   cardLast4: string
 }
 
-const mockPayments: Payment[] = [
-  { id: '1', clientName: 'Sarah Johnson', amount: 150, status: 'succeeded', date: 'Mar 11, 2026', cardBrand: 'Visa', cardLast4: '4242' },
-  { id: '2', clientName: 'Mike Chen', amount: 200, status: 'pending', date: 'Mar 11, 2026', cardBrand: 'Mastercard', cardLast4: '8888' },
-  { id: '3', clientName: 'James Wilson', amount: 150, status: 'succeeded', date: 'Mar 10, 2026', cardBrand: 'Visa', cardLast4: '1234' },
-  { id: '4', clientName: 'Emily Davis', amount: 300, status: 'succeeded', date: 'Mar 10, 2026', cardBrand: 'Amex', cardLast4: '0005' },
-  { id: '5', clientName: 'Lisa Park', amount: 200, status: 'failed', date: 'Mar 9, 2026', cardBrand: 'Visa', cardLast4: '9876' },
-  { id: '6', clientName: 'Tom Rivera', amount: 150, status: 'succeeded', date: 'Mar 9, 2026', cardBrand: 'Mastercard', cardLast4: '5555' },
-]
 
 function mapApiPayment(p: ApiPayment): Payment {
   const dt = new Date(p.createdAt)
@@ -59,17 +51,22 @@ function summarize(payments: Payment[]) {
 
 export default function Payments() {
   const { user } = useAuth()
-  const [payments, setPayments] = useState<Payment[]>(mockPayments)
+  const [payments, setPayments] = useState<Payment[] | null>(null)
 
   useEffect(() => {
-    if (!user) {
-      setPayments(mockPayments)
-      return
-    }
+    if (!user) return
     fetchPayments()
       .then((data) => setPayments(data.map(mapApiPayment)))
-      .catch(() => setPayments(mockPayments))
+      .catch(() => setPayments([]))
   }, [user])
+
+  if (payments === null) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex justify-center pt-24">
+        <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   const { collected, pending, pendingCount, failed, failedCount } = summarize(payments)
 
@@ -101,6 +98,9 @@ export default function Payments() {
       </div>
 
       <div className="bg-white/70 rounded-xl border border-neutral-200/60 overflow-hidden">
+        {payments.length === 0 ? (
+          <p className="px-5 py-10 text-sm text-neutral-400 text-center">No payments yet.</p>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left">
@@ -141,6 +141,7 @@ export default function Payments() {
             })}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   )

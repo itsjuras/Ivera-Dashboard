@@ -13,14 +13,6 @@ interface Client {
   createdAt: string
 }
 
-const mockClients: Client[] = [
-  { id: '1', firstName: 'Sarah', lastName: 'Johnson', email: 'sarah@email.com', phone: '(555) 123-4567', status: 'ACTIVE', createdAt: 'Jan 15, 2026' },
-  { id: '2', firstName: 'Mike', lastName: 'Chen', email: 'mike@email.com', phone: '(555) 234-5678', status: 'ACTIVE', createdAt: 'Feb 3, 2026' },
-  { id: '3', firstName: 'Emily', lastName: 'Davis', email: 'emily@email.com', phone: '(555) 345-6789', status: 'BOOKED', createdAt: 'Mar 1, 2026' },
-  { id: '4', firstName: 'James', lastName: 'Wilson', email: 'james@email.com', phone: '(555) 456-7890', status: 'ACTIVE', createdAt: 'Dec 10, 2025' },
-  { id: '5', firstName: 'Lisa', lastName: 'Park', email: 'lisa@email.com', phone: '(555) 567-8901', status: 'BOOKED', createdAt: 'Mar 5, 2026' },
-  { id: '6', firstName: 'Tom', lastName: 'Rivera', email: 'tom@email.com', phone: '(555) 678-9012', status: 'DEACTIVATED', createdAt: 'Nov 20, 2025' },
-]
 
 function mapApiClient(c: ApiClient): Client {
   const dt = new Date(c.createdAt)
@@ -44,17 +36,22 @@ const statusStyles: Record<string, string> = {
 
 export default function Clients() {
   const { user } = useAuth()
-  const [clients, setClients] = useState<Client[]>(mockClients)
+  const [clients, setClients] = useState<Client[] | null>(null)
 
   useEffect(() => {
-    if (!user) {
-      setClients(mockClients)
-      return
-    }
+    if (!user) return
     fetchClients()
       .then((data) => setClients(data.map(mapApiClient)))
-      .catch(() => setClients(mockClients))
+      .catch(() => setClients([]))
   }, [user])
+
+  if (clients === null) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto flex justify-center pt-24">
+        <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -64,6 +61,9 @@ export default function Clients() {
       />
 
       <div className="bg-white/70 rounded-xl border border-neutral-200/60 overflow-hidden">
+        {clients.length === 0 ? (
+          <p className="px-5 py-10 text-sm text-neutral-400 text-center">No clients yet.</p>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left">
@@ -102,6 +102,7 @@ export default function Clients() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   )
