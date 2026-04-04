@@ -33,7 +33,7 @@ const products = [
     description:
       'Ask any business question in plain English and get a clear, data-backed answer. Tracks revenue, churn, pipeline health, and marketing performance. Delivers a weekly briefing with exactly where to focus next.',
     cta: 'Try demo',
-    href: '/dashboard/consultant',
+    href: '/demo/consultant',
   },
   {
     tag: 'Live now',

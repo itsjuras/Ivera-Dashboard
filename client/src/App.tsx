@@ -14,10 +14,12 @@ import Onboard from './views/Onboard'
 import ReceptionistLayout from './views/ReceptionistLayout'
 import SalesDashboard from './views/SalesDashboard'
 import ConsultantDashboard from './views/ConsultantDashboard'
+import LiveConsultantDashboard from './views/LiveConsultantDashboard'
 import About from './views/About'
 import Portal from './views/Portal'
 import AdminDashboard from './views/AdminDashboard'
 import ProtectedRoute from './components/ProtectedRoute'
+import ReceptionistDemo from './views/ReceptionistDemo'
 
 // Registry of all products. Adding a new product = add one entry here.
 // The slug must match the slug in the `products` DB table.
@@ -138,7 +140,7 @@ function DashboardShell() {
         <Routes>
           <Route path="/receptionist/*" element={<ReceptionistLayout />} />
           <Route path="/sales" element={<SalesDashboard />} />
-          <Route path="/consultant" element={<ConsultantDashboard />} />
+          <Route path="/consultant" element={<LiveConsultantDashboard />} />
           <Route path="/support" element={<SupportDashboard />} />
           <Route path="/admin" element={role === 'ivera_admin' ? <AdminDashboard /> : <Navigate to="/" replace />} />
           <Route
@@ -179,6 +181,8 @@ export default function App() {
           <Route path="/" element={<RootRoute />} />
           <Route path="/about" element={<About />} />
           <Route path="/portal" element={<Portal />} />
+          <Route path="/demo/receptionist" element={<ReceptionistDemo />} />
+          <Route path="/demo/consultant" element={<ConsultantDashboard />} />
           <Route path="/onboard" element={<Onboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />

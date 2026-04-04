@@ -56,7 +56,7 @@ export default function Portal() {
             </div>
           </a>
           <a
-            href="/dashboard/receptionist"
+            href="/demo/receptionist"
             className="flex items-center gap-3 px-8 py-4 border border-neutral-600 text-neutral-300 rounded-xl hover:bg-neutral-800 transition-colors w-full sm:w-auto"
           >
             <LayoutDashboard size={18} />
