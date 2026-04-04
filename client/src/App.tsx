@@ -17,6 +17,7 @@ import ConsultantDashboard from './views/ConsultantDashboard'
 import About from './views/About'
 import Portal from './views/Portal'
 import AdminDashboard from './views/AdminDashboard'
+import ProtectedRoute from './components/ProtectedRoute'
 
 // Registry of all products. Adding a new product = add one entry here.
 // The slug must match the slug in the `products` DB table.
@@ -40,7 +41,7 @@ function NoProducts() {
 
 function DashboardShell() {
   const { pathname } = useLocation()
-  const { user, role, products, loading, signOut } = useAuth()
+  const { user, role, products, loading, profileError, signOut } = useAuth()
   const navigate = useNavigate()
   const [showPopup, setShowPopup] = useState(false)
 
@@ -127,6 +128,13 @@ function DashboardShell() {
 
       {/* Content */}
       <main className="relative z-10 flex-1 flex flex-col min-h-0 pt-14">
+        {profileError && (
+          <div className="px-6 pt-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {profileError}
+            </div>
+          </div>
+        )}
         <Routes>
           <Route path="/receptionist/*" element={<ReceptionistLayout />} />
           <Route path="/sales" element={<SalesDashboard />} />
@@ -174,7 +182,7 @@ export default function App() {
           <Route path="/onboard" element={<Onboard />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard/*" element={<DashboardShell />} />
+          <Route path="/dashboard/*" element={<ProtectedRoute><DashboardShell /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <ChatWidget />

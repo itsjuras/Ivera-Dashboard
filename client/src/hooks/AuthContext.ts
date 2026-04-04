@@ -8,6 +8,7 @@ export interface AuthState {
   loading: boolean
   role: Role | null
   products: UserProduct[]
+  profileError: string | null
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, metadata: Record<string, string>) => Promise<{ error: string | null }>
   signOut: () => Promise<void>

@@ -12,7 +12,6 @@ import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
 
 const SALES_API = 'https://sales.ivera.ca'
-const SALES_API_KEY = import.meta.env.VITE_SALES_API_KEY || ''
 
 interface PortalStats {
   totals: {
@@ -64,27 +63,60 @@ function replyRate(replied: number, emailed: number) {
 }
 
 export default function SalesDashboard() {
-  const { user } = useAuth()
+  const { session } = useAuth()
   const [stats, setStats] = useState<PortalStats | null>(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user || !SALES_API_KEY) return
+    if (!session?.access_token) return
+
+    let cancelled = false
+    setError(null)
+    setStats(null)
+
     fetch(`${SALES_API}/portal/stats`, {
-      headers: { Authorization: `Bearer ${SALES_API_KEY}` },
+      headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then(setStats)
-      .catch(() => setError(true))
-  }, [user])
+      .then((data) => {
+        if (!cancelled) setStats(data)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(
+            err.message === 'HTTP 401'
+              ? 'Your account is signed in, but it is not mapped to a live sales workspace yet.'
+              : 'We could not load live sales data.',
+          )
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session])
 
   if (!stats && !error) {
     return (
       <div className="p-8 max-w-7xl mx-auto flex justify-center pt-24">
         <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto">
+        <PageHeader
+          title="Sales Agent"
+          subtitle="Outbound campaign performance and prospect pipeline"
+        />
+        <div className="bg-white/70 rounded-xl border border-red-200/60 p-6 text-sm text-red-700">
+          {error}
+        </div>
       </div>
     )
   }

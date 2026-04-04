@@ -14,16 +14,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [role, setRole] = useState<Role | null>(null)
   const [products, setProducts] = useState<UserProduct[]>([])
+  const [profileError, setProfileError] = useState<string | null>(null)
 
   async function loadProfile() {
     try {
       const profile = await fetchMe()
       setRole(profile.role)
       setProducts(profile.products)
+      setProfileError(null)
     } catch {
-      // Server may not be reachable; non-fatal
-      setRole(null)
-      setProducts([])
+      // Keep the session intact and surface the profile/API failure separately.
+      setProfileError('We could not load your dashboard access right now.')
     }
   }
 
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setRole(null)
           setProducts([])
+          setProfileError(null)
         }
         // Mark loading done after first event (INITIAL_SESSION or SIGNED_IN)
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (error) return { error: error.message }
 
+    setProfileError(null)
     // Provision role + products server-side
     try {
       const result = await postSignup()
@@ -82,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setRole(null)
     setProducts([])
+    setProfileError(null)
   }
 
   async function refreshProfile() {
@@ -89,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, products, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, loading, role, products, profileError, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

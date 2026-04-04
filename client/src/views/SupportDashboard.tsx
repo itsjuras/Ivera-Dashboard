@@ -68,6 +68,7 @@ export default function SupportDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
   const [ingestUrl, setIngestUrl] = useState('')
@@ -83,15 +84,25 @@ export default function SupportDashboard() {
   const load = useCallback(async () => {
     if (!session) return
     setLoading(true)
+    setError(null)
     try {
       const [statsRes, ticketsRes, kbRes] = await Promise.all([
         fetch(`${API}/support/stats`, { headers: headers() }),
         fetch(`${API}/support/tickets?limit=100`, { headers: headers() }),
         fetch(`${API}/support/kb`, { headers: headers() }),
       ])
+      if (!statsRes.ok || !ticketsRes.ok || !kbRes.ok) {
+        const status = [statsRes.status, ticketsRes.status, kbRes.status].find((code) => code >= 400) ?? 500
+        throw new Error(`HTTP ${status}`)
+      }
       if (statsRes.ok) setStats(await statsRes.json())
       if (ticketsRes.ok) { const d = await ticketsRes.json(); setTickets(d.tickets || []) }
       if (kbRes.ok) { const d = await kbRes.json(); setKbArticles(d.articles || []) }
+    } catch (err) {
+      const message = err instanceof Error && err.message === 'HTTP 401'
+        ? 'Your account is signed in, but it is not authorized for a support workspace yet.'
+        : 'We could not load live support data.'
+      setError(message)
     } finally {
       setLoading(false)
     }
@@ -164,6 +175,16 @@ export default function SupportDashboard() {
       <div className="text-xs text-neutral-400 tracking-widest uppercase">Loading support data...</div>
     </div>
   )
+
+  if (error) {
+    return (
+      <div className="flex h-full items-start p-8">
+        <div className="w-full rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          {error}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full overflow-hidden">

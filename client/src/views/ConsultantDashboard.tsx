@@ -117,9 +117,12 @@ export default function ConsultantDashboard() {
               <span className="text-sm font-semibold tracking-wider uppercase text-neutral-900">Business Consultant</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs text-neutral-400 tracking-widest uppercase">Live</span>
+              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+              <span className="text-xs text-neutral-400 tracking-widest uppercase">Preview</span>
             </div>
+            <p className="mt-3 text-xs leading-relaxed text-neutral-500">
+              This workspace is still using sample consultant insights, not live customer data yet.
+            </p>
           </div>
 
           {/* Connected Sources */}
