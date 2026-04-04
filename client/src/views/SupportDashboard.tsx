@@ -87,7 +87,7 @@ export default function SupportDashboard() {
       const [statsRes, ticketsRes, kbRes] = await Promise.all([
         fetch(`${API}/support/stats`, { headers: headers() }),
         fetch(`${API}/support/tickets?limit=100`, { headers: headers() }),
-        fetch(`${API}/support/kb/articles`, { headers: headers() }),
+        fetch(`${API}/support/kb`, { headers: headers() }),
       ])
       if (statsRes.ok) setStats(await statsRes.json())
       if (ticketsRes.ok) { const d = await ticketsRes.json(); setTickets(d.tickets || []) }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './hooks/useAuth'
+import { AuthProvider } from './hooks/AuthProvider'
+import { useAuth } from './hooks/useAuth'
 import WaveBackground from './components/WaveBackground'
 import MockDataPopup from './components/MockDataBanner'
 import { fetchStats } from './services/api'

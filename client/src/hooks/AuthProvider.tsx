@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useState,
   type ReactNode,
@@ -8,20 +6,7 @@ import {
 import type { User, Session } from '@supabase/supabase-js'
 import supabase from '../services/supabase'
 import { postSignup, fetchMe, type Role, type UserProduct } from '../services/api'
-
-interface AuthState {
-  user: User | null
-  session: Session | null
-  loading: boolean
-  role: Role | null
-  products: UserProduct[]
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
-  signUp: (email: string, password: string, metadata: Record<string, string>) => Promise<{ error: string | null }>
-  signOut: () => Promise<void>
-  refreshProfile: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthState | undefined>(undefined)
+import { AuthContext } from './AuthContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -108,10 +93,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
 }

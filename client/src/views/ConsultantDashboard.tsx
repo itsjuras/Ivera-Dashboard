@@ -88,7 +88,7 @@ export default function ConsultantDashboard() {
     setTyping(true)
 
     // Simulate response delay
-    setTimeout(() => {
+    window.setTimeout(() => {
       const response: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -97,7 +97,7 @@ export default function ConsultantDashboard() {
       }
       setMessages((prev) => [...prev, response])
       setTyping(false)
-    }, 1200 + Math.random() * 800)
+    }, 1200 + window.Math.random() * 800)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
