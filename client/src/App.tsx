@@ -53,8 +53,8 @@ function DashboardShell() {
     fetchStats().catch(() => setShowPopup(true))
   }, [user])
 
-  // Show spinner while auth + profile are loading to avoid flash of "no products"
-  if (loading) {
+  // While auth is resolving, show a minimal spinner rather than a broken shell
+  if (loading && !user) {
     return (
       <div className="h-screen flex items-center justify-center bg-neutral-50">
         <div className="w-6 h-6 rounded-full border-2 border-neutral-900 border-t-transparent animate-spin" />
@@ -158,11 +158,11 @@ function DashboardShell() {
   )
 }
 
-// Redirects authenticated users landing on "/" (e.g. after email confirmation) to /dashboard
+// Redirects authenticated users landing on "/" (e.g. after email confirmation) to /dashboard.
+// Shows Landing immediately — if user turns out to be logged in, redirects without blank flash.
 function RootRoute() {
   const { user, loading } = useAuth()
-  if (loading) return null
-  if (user) return <Navigate to="/dashboard" replace />
+  if (!loading && user) return <Navigate to="/dashboard" replace />
   return <Landing />
 }
 

@@ -43,15 +43,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session) await loadProfile()
-      setLoading(false)
-    })
-
+    // Use onAuthStateChange exclusively — it fires INITIAL_SESSION on mount
+    // so we don't need a separate getSession() call (which causes lock contention).
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
         if (session) {
@@ -59,6 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setRole(null)
           setProducts([])
+        }
+        // Mark loading done after first event (INITIAL_SESSION or SIGNED_IN)
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          setLoading(false)
         }
       },
     )
