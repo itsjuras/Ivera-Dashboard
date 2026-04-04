@@ -224,6 +224,21 @@ export function updateCustomerPhone(
   return authPatch(`/api/user/customers/${userId}/phone`, { phone })
 }
 
+export function createCustomer(
+  email: string,
+  firstName?: string | null,
+  lastName?: string | null,
+): Promise<{ userId: string; email: string }> {
+  return authPost('/api/user/customers', { email, firstName, lastName })
+}
+
+export function updateCustomerEmail(
+  userId: string,
+  email: string,
+): Promise<{ success: boolean }> {
+  return authPatch(`/api/user/customers/${userId}/email`, { email })
+}
+
 export function upsertCustomerProfile(
   userId: string,
   profile: Partial<CustomerProfile>,

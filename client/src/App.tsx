@@ -158,11 +158,7 @@ function DashboardShell() {
   )
 }
 
-// Redirects authenticated users landing on "/" (e.g. after email confirmation) to /dashboard.
-// Shows Landing immediately — if user turns out to be logged in, redirects without blank flash.
 function RootRoute() {
-  const { user, loading } = useAuth()
-  if (!loading && user) return <Navigate to="/dashboard" replace />
   return <Landing />
 }
 

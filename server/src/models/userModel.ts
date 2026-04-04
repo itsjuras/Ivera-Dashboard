@@ -252,6 +252,40 @@ export async function getCustomerProfile(userId: string): Promise<CustomerProfil
   }
 }
 
+export async function createCustomer(
+  email: string,
+  firstName?: string | null,
+  lastName?: string | null,
+): Promise<{ userId: string; email: string }> {
+  // Create the Supabase auth user (email already confirmed, no password — user sets via magic link / reset)
+  const { data, error } = await supabase.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: {
+      ...(firstName ? { first_name: firstName } : {}),
+      ...(lastName  ? { last_name:  lastName  } : {}),
+    },
+  })
+
+  if (error) throw error
+  const userId = data.user.id
+
+  // Provision customer role
+  await provisionCustomer(userId)
+
+  // Pre-fill profile if name provided
+  if (firstName || lastName) {
+    await upsertCustomerProfile(userId, { firstName: firstName ?? null, lastName: lastName ?? null })
+  }
+
+  return { userId, email: data.user.email ?? email }
+}
+
+export async function updateCustomerEmail(userId: string, email: string): Promise<void> {
+  const { error } = await supabase.auth.admin.updateUserById(userId, { email })
+  if (error) throw error
+}
+
 export async function upsertCustomerProfile(
   userId: string,
   profile: Partial<CustomerProfile>,

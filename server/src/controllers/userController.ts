@@ -10,6 +10,8 @@ import {
   deactivateProduct,
   updateCustomerPhone,
   upsertCustomerProfile,
+  createCustomer,
+  updateCustomerEmail,
 } from '../models/userModel'
 
 // GET /api/user/me
@@ -124,6 +126,45 @@ export async function updatePhone(req: AuthRequest, res: Response): Promise<void
   } catch (err) {
     console.error('updatePhone failed:', err)
     res.status(500).json({ error: 'Failed to update phone' })
+  }
+}
+
+// POST /api/user/customers
+// Ivera admin only — creates a new customer account
+// Body: { email, firstName?, lastName? }
+export async function createNewCustomer(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { email, firstName, lastName } = req.body
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: 'email is required' })
+      return
+    }
+    const result = await createCustomer(email.trim().toLowerCase(), firstName ?? null, lastName ?? null)
+    res.json(result)
+  } catch (err: unknown) {
+    console.error('createNewCustomer failed:', err)
+    const msg = err instanceof Error ? err.message : 'Failed to create customer'
+    res.status(500).json({ error: msg })
+  }
+}
+
+// PATCH /api/user/customers/:userId/email
+// Ivera admin only — updates a customer's email address
+// Body: { email }
+export async function updateEmail(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.params.userId as string
+    const { email } = req.body
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ error: 'email is required' })
+      return
+    }
+    await updateCustomerEmail(userId, email.trim().toLowerCase())
+    res.json({ success: true })
+  } catch (err: unknown) {
+    console.error('updateEmail failed:', err)
+    const msg = err instanceof Error ? err.message : 'Failed to update email'
+    res.status(500).json({ error: msg })
   }
 }
 

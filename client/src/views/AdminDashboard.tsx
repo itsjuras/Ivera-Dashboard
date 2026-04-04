@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Phone, Building2, Hash, Calendar, Mail } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Phone, Building2, Hash, Calendar, Mail, UserPlus } from 'lucide-react'
 import {
   fetchCustomers,
   fetchPlans,
@@ -7,7 +7,9 @@ import {
   updateCustomerProduct,
   removeCustomerProduct,
   updateCustomerPhone,
+  updateCustomerEmail,
   upsertCustomerProfile,
+  createCustomer,
   type CustomerSummary,
   type CustomerProfile,
   type Plan,
@@ -139,6 +141,13 @@ export default function AdminDashboard() {
   const [addState, setAddState] = useState({ productSlug: '', planId: 0, customPriceCad: '', customNotes: '' })
   const [saving, setSaving] = useState(false)
 
+  // New customer modal
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false)
+  const [newCustomerState, setNewCustomerState] = useState({ email: '', firstName: '', lastName: '' })
+  const [newCustomerSaving, setNewCustomerSaving] = useState(false)
+  const [newCustomerError, setNewCustomerError] = useState<string | null>(null)
+  const newCustomerEmailRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     Promise.all([fetchCustomers(), fetchPlans()])
       .then(([c, p]) => {
@@ -168,6 +177,35 @@ export default function AdminDashboard() {
     if (!selectedId) return
     await updateCustomerPhone(selectedId, value)
     reload()
+  }
+
+  async function saveEmail(value: string | null) {
+    if (!selectedId || !value) return
+    await updateCustomerEmail(selectedId, value)
+    reload()
+  }
+
+  async function handleCreateCustomer() {
+    if (!newCustomerState.email.trim()) return
+    setNewCustomerSaving(true)
+    setNewCustomerError(null)
+    try {
+      const result = await createCustomer(
+        newCustomerState.email.trim(),
+        newCustomerState.firstName.trim() || null,
+        newCustomerState.lastName.trim() || null,
+      )
+      setNewCustomerOpen(false)
+      setNewCustomerState({ email: '', firstName: '', lastName: '' })
+      // Reload and select the new customer
+      const updated = await fetchCustomers()
+      setCustomers(updated)
+      setSelectedId(result.userId)
+    } catch (err: unknown) {
+      setNewCustomerError(err instanceof Error ? err.message : 'Failed to create customer')
+    } finally {
+      setNewCustomerSaving(false)
+    }
   }
 
   // ── Product management ──────────────────────────────────────────────────
@@ -243,8 +281,19 @@ export default function AdminDashboard() {
       {/* Customer list sidebar */}
       <aside className="w-64 bg-white/80 border-r border-neutral-200/60 flex flex-col shrink-0 overflow-y-auto">
         <div className="px-5 pt-16 pb-4 border-b border-neutral-200/60">
-          <p className="text-sm font-semibold tracking-wider uppercase text-neutral-900">Customers</p>
-          <p className="text-xs text-neutral-400 mt-0.5">{customers.length} account{customers.length !== 1 ? 's' : ''}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold tracking-wider uppercase text-neutral-900">Customers</p>
+              <p className="text-xs text-neutral-400 mt-0.5">{customers.length} account{customers.length !== 1 ? 's' : ''}</p>
+            </div>
+            <button
+              onClick={() => { setNewCustomerOpen(true); setNewCustomerError(null); setTimeout(() => newCustomerEmailRef.current?.focus(), 50) }}
+              className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
+              title="Add customer"
+            >
+              <UserPlus size={15} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 py-2">
           {customers.length === 0 ? (
@@ -326,7 +375,8 @@ export default function AdminDashboard() {
                 icon={Mail}
                 value={selected.email}
                 placeholder="—"
-                onSave={async () => {}} // read-only — managed by Supabase auth
+                type="email"
+                onSave={saveEmail}
               />
               <Field
                 label="Phone"
@@ -520,6 +570,85 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* New customer modal */}
+      {newCustomerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setNewCustomerOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-neutral-200 w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-sm font-semibold tracking-wider uppercase text-neutral-900">New Customer</p>
+              <button onClick={() => setNewCustomerOpen(false)} className="text-neutral-400 hover:text-neutral-600">
+                <X size={16} />
+              </button>
+            </div>
+
+            {newCustomerError && (
+              <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                {newCustomerError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Email <span className="text-red-400">*</span></label>
+                <input
+                  ref={newCustomerEmailRef}
+                  type="email"
+                  required
+                  value={newCustomerState.email}
+                  onChange={(e) => setNewCustomerState((s) => ({ ...s, email: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateCustomer() }}
+                  placeholder="customer@business.com"
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">First name</label>
+                  <input
+                    type="text"
+                    value={newCustomerState.firstName}
+                    onChange={(e) => setNewCustomerState((s) => ({ ...s, firstName: e.target.value }))}
+                    placeholder="Jane"
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">Last name</label>
+                  <input
+                    type="text"
+                    value={newCustomerState.lastName}
+                    onChange={(e) => setNewCustomerState((s) => ({ ...s, lastName: e.target.value }))}
+                    placeholder="Smith"
+                    className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-5">
+              <button
+                onClick={handleCreateCustomer}
+                disabled={newCustomerSaving || !newCustomerState.email.trim()}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-neutral-900 text-white text-xs font-medium rounded-lg hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+              >
+                {newCustomerSaving ? 'Creating...' : <><Plus size={13} /> Create customer</>}
+              </button>
+              <button
+                onClick={() => setNewCustomerOpen(false)}
+                className="px-4 py-2 text-neutral-500 text-xs rounded-lg hover:bg-neutral-100"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400 mt-3 text-center">
+              Customer can set their password via "Forgot password" on the login page.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
