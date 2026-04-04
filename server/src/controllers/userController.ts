@@ -4,6 +4,8 @@ import {
   getUserRole,
   getUserProducts,
   getAllPlans,
+  provisionCustomer,
+  provisionIveraAdmin,
   listCustomers,
   assignProduct,
   updateProduct,
@@ -14,10 +16,23 @@ import {
   updateCustomerEmail,
 } from '../models/userModel'
 
+async function ensureProvisionedUser(userId: string, userEmail: string): Promise<void> {
+  const existingRole = await getUserRole(userId)
+  if (existingRole) return
+
+  if (userEmail.endsWith('@ivera.ca')) {
+    await provisionIveraAdmin(userId)
+    return
+  }
+
+  await provisionCustomer(userId)
+}
+
 // GET /api/user/me
 // Returns the current user's role and active product subscriptions
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   try {
+    await ensureProvisionedUser(req.userId, req.userEmail)
     const [role, products] = await Promise.all([
       getUserRole(req.userId),
       getUserProducts(req.userId),

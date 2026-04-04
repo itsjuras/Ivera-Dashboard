@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import supabase from '../config/db'
-import { getUserRole } from '../models/userModel'
+import { getUserRole, provisionCustomer, provisionIveraAdmin } from '../models/userModel'
 
 export interface AuthRequest extends Request {
   userId: string
@@ -38,7 +38,17 @@ export async function requireIveraAdmin(
 ): Promise<void> {
   await requireAuth(req, res, async () => {
     try {
-      const role = await getUserRole((req as AuthRequest).userId)
+      const authReq = req as AuthRequest
+      let role = await getUserRole(authReq.userId)
+      if (!role) {
+        if (authReq.userEmail.endsWith('@ivera.ca')) {
+          await provisionIveraAdmin(authReq.userId)
+          role = 'ivera_admin'
+        } else {
+          await provisionCustomer(authReq.userId)
+          role = await getUserRole(authReq.userId)
+        }
+      }
       if (role !== 'ivera_admin') {
         res.status(403).json({ error: 'Forbidden' })
         return
