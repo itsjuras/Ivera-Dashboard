@@ -50,6 +50,17 @@ function currentMonthKey() {
   return new Date().toISOString().slice(0, 7)
 }
 
+function formatHelperDate(value: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
 export default function SpendTrackerPanel() {
   const [spendMonth] = useState(currentMonthKey())
   const [providerSpend, setProviderSpend] = useState<Record<SpendProviderKey, string>>({
@@ -77,6 +88,9 @@ export default function SpendTrackerPanel() {
     creditsRemaining: number | null
     creditsTotal: number | null
     usedQuotaPercent: number | null
+    lastReset: string | null
+    nextReset: string | null
+    resetFrequency: string | null
   } | null>(null)
   const [sendGridUsageError, setSendGridUsageError] = useState<string | null>(null)
   const [exaUsage, setExaUsage] = useState<{
@@ -161,6 +175,9 @@ export default function SpendTrackerPanel() {
           creditsRemaining: data.creditsRemaining,
           creditsTotal: data.creditsTotal,
           usedQuotaPercent: data.usedQuotaPercent,
+          lastReset: data.lastReset,
+          nextReset: data.nextReset,
+          resetFrequency: data.resetFrequency,
         })
       })
       .catch((err) => {
@@ -354,22 +371,39 @@ export default function SpendTrackerPanel() {
           <div className="rounded-xl border border-neutral-200 bg-white/80 px-4 py-4">
             <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">SendGrid Usage</p>
             {sendGridUsage ? (
-              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs text-neutral-500">Credits Remaining</p>
-                  <p className="mt-1 text-lg font-semibold text-neutral-900">{sendGridUsage.creditsRemaining ?? '—'}</p>
+              <div className="mt-2 space-y-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-neutral-500">Credits Remaining</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{sendGridUsage.creditsRemaining ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Credits Total</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{sendGridUsage.creditsTotal ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500">Quota Used</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">
+                      {sendGridUsage.usedQuotaPercent !== null && sendGridUsage.usedQuotaPercent !== undefined
+                        ? `${sendGridUsage.usedQuotaPercent}%`
+                        : '—'}
+                    </p>
+                  </div>
                 </div>
                 <div>
-                  <p className="text-xs text-neutral-500">Credits Total</p>
-                  <p className="mt-1 text-lg font-semibold text-neutral-900">{sendGridUsage.creditsTotal ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-neutral-500">Quota Used</p>
-                  <p className="mt-1 text-lg font-semibold text-neutral-900">
-                    {sendGridUsage.usedQuotaPercent !== null && sendGridUsage.usedQuotaPercent !== undefined
-                      ? `${sendGridUsage.usedQuotaPercent}%`
-                      : '—'}
+                  <p className="text-xs text-neutral-500">
+                    {sendGridUsage.resetFrequency
+                      ? `Reset cycle: ${sendGridUsage.resetFrequency}`
+                      : 'Reset cycle unavailable'}
                   </p>
+                  <p className="mt-1 text-sm font-semibold text-neutral-900">
+                    Next reset {formatHelperDate(sendGridUsage.nextReset)}
+                  </p>
+                  {sendGridUsage.lastReset ? (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Last reset {formatHelperDate(sendGridUsage.lastReset)}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             ) : (

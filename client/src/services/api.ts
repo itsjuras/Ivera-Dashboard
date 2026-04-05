@@ -155,6 +155,9 @@ export interface SendGridUsageSummary {
   creditsRemaining: number | null
   usedQuotaPercent: number | null
   creditsTotal: number | null
+  lastReset: string | null
+  nextReset: string | null
+  resetFrequency: string | null
 }
 
 export interface ExaUsageSummary {

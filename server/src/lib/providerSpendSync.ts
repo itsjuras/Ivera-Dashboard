@@ -21,6 +21,9 @@ export interface SendGridUsageSummary {
   creditsRemaining: number | null
   usedQuotaPercent: number | null
   creditsTotal: number | null
+  lastReset: string | null
+  nextReset: string | null
+  resetFrequency: string | null
 }
 
 export interface ExaUsageSummary {
@@ -111,6 +114,9 @@ export async function fetchSendGridUsage(month: string): Promise<SendGridUsageSu
     remain?: unknown
     total?: unknown
     used?: unknown
+    last_reset?: unknown
+    next_reset?: unknown
+    reset_frequency?: unknown
   }
 
   const creditsRemaining = parseMoneyValue(payload.remain)
@@ -129,6 +135,9 @@ export async function fetchSendGridUsage(month: string): Promise<SendGridUsageSu
     creditsTotal,
     usedQuotaPercent:
       usedQuotaPercent !== null && Number.isFinite(usedQuotaPercent) ? usedQuotaPercent : null,
+    lastReset: typeof payload.last_reset === 'string' ? payload.last_reset : null,
+    nextReset: typeof payload.next_reset === 'string' ? payload.next_reset : null,
+    resetFrequency: typeof payload.reset_frequency === 'string' ? payload.reset_frequency : null,
   }
 }
 
