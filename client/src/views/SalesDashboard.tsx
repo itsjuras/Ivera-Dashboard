@@ -173,6 +173,13 @@ function formatRunDate(iso: string) {
   }).format(new Date(iso))
 }
 
+function formatElapsedTimer(startedAt: number, now = Date.now()) {
+  const totalSeconds = Math.max(0, Math.floor((now - startedAt) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 function getNextScheduledCampaignRun(now = new Date()) {
   const targetDays = new Set([2, 3, 4]) // Tue-Thu in UTC
 
@@ -293,7 +300,7 @@ function ListCard({
 }: {
   title: string
   subtitle: string
-  rows: Array<{ id: string; title: string; meta: string; badge?: string }>
+  rows: Array<{ id: string; title: string; meta: string; badge?: string; interactive?: boolean }>
   emptyLabel: string
   onRowClick?: (id: string) => void
 }) {
@@ -312,9 +319,9 @@ function ListCard({
             <button
               key={row.id}
               type="button"
-              onClick={onRowClick ? () => onRowClick(row.id) : undefined}
+              onClick={onRowClick && row.interactive !== false ? () => onRowClick(row.id) : undefined}
               className={`flex w-full items-start justify-between gap-4 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 text-left ${
-                onRowClick ? 'transition hover:bg-neutral-50/80' : ''
+                onRowClick && row.interactive !== false ? 'transition hover:bg-neutral-50/80' : ''
               }`}
             >
               <div className="min-w-0">
@@ -405,6 +412,12 @@ export default function SalesDashboard() {
   const [expectedLeadMin, setExpectedLeadMin] = useState('')
   const [expectedLeadMax, setExpectedLeadMax] = useState('')
   const [manualLeadOverride, setManualLeadOverride] = useState('')
+  const [pendingRun, setPendingRun] = useState<{
+    startedAt: number
+    title: string
+    requestedLeadCount: number | null
+  } | null>(null)
+  const [runTimerNow, setRunTimerNow] = useState(Date.now())
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -541,14 +554,31 @@ export default function SalesDashboard() {
     (parsedManualOverride < parsedExpectedMin || parsedManualOverride > parsedExpectedMax)
 
   const latestCampaignRuns = useMemo(
-    () =>
-      campaigns.slice(0, 8).map((campaign) => ({
+    () => {
+      const rows = campaigns.slice(0, 8).map((campaign) => ({
         id: campaign.id,
         title: campaign.product_name || 'Campaign run',
         meta: formatRunDate(campaign.created_at),
         badge: `${campaign.total_leads || 0} leads`,
-      })),
-    [campaigns],
+      }))
+
+      if (!pendingRun) return rows
+
+      return [
+        {
+          id: 'pending-run',
+          title: pendingRun.title,
+          meta: `Live run in progress · ${formatElapsedTimer(pendingRun.startedAt, runTimerNow)}`,
+          badge:
+            pendingRun.requestedLeadCount && pendingRun.requestedLeadCount > 0
+              ? `${pendingRun.requestedLeadCount} requested`
+              : 'running',
+          interactive: false,
+        },
+        ...rows,
+      ]
+    },
+    [campaigns, pendingRun, runTimerNow],
   )
 
   const selectedRun = useMemo(
@@ -601,6 +631,47 @@ export default function SalesDashboard() {
 
   const nextScheduledRun = useMemo(() => getNextScheduledCampaignRun(), [])
 
+  useEffect(() => {
+    if (!pendingRun || !session?.access_token) return
+
+    const tickTimer = window.setInterval(() => {
+      setRunTimerNow(Date.now())
+    }, 1000)
+
+    const pollTimer = window.setInterval(() => {
+      void refreshStats()
+    }, 10000)
+
+    return () => {
+      window.clearInterval(tickTimer)
+      window.clearInterval(pollTimer)
+    }
+  }, [pendingRun, session?.access_token])
+
+  useEffect(() => {
+    if (!pendingRun) return
+
+    const startedAt = pendingRun.startedAt
+    const matchingRun = campaigns.find(
+      (campaign) => new Date(campaign.created_at).getTime() >= startedAt - 60_000,
+    )
+
+    if (!matchingRun) return
+
+    const hasMeaningfulProgress =
+      (matchingRun.total_leads ?? 0) > 0 ||
+      (matchingRun.emailed ?? 0) > 0 ||
+      (matchingRun.replied ?? 0) > 0 ||
+      (matchingRun.booked ?? 0) > 0 ||
+      (matchingRun.unsubscribed ?? 0) > 0
+
+    const hasTimedOut = Date.now() - startedAt > 3 * 60_000
+
+    if (hasMeaningfulProgress || hasTimedOut) {
+      setPendingRun(null)
+    }
+  }, [campaigns, pendingRun])
+
   const outreachMetrics = [
     { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
     { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Rolling 7 days' },
@@ -648,15 +719,23 @@ export default function SalesDashboard() {
 
     try {
       const requestedLeadCount = hasManualOverride ? Math.round(parsedManualOverride) : undefined
+      const startedAt = Date.now()
       const data = await salesRequest<{ message: string }>(session.access_token, '/campaign/start', {
         method: 'POST',
         body: JSON.stringify(requestedLeadCount ? { num_leads: requestedLeadCount } : {}),
       })
+      setPendingRun({
+        startedAt,
+        title: campaignConfig?.product_name || 'Campaign run',
+        requestedLeadCount: requestedLeadCount ?? null,
+      })
+      setRunTimerNow(startedAt)
       setAdminActionMessage(
         requestedLeadCount
           ? `${data.message || 'Campaign started.'} Manual override: ${requestedLeadCount} leads.`
           : (data.message || 'Campaign started.'),
       )
+      await refreshStats()
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to start campaign.')
     } finally {
