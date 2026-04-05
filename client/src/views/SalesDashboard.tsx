@@ -118,9 +118,10 @@ const statusColors: Record<string, string> = {
 type OverviewDays = 7 | 14 | 30
 type ProspectDays = 0 | 7 | 14 | 30
 type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
-type TabKey = 'overview' | 'prospects'
+type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'leadQuality' | 'prospects'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
+type SpendProviderKey = 'twilio' | 'aws' | 'openai' | 'claude' | 'digitalocean' | 'sendgrid' | 'other'
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -245,6 +246,47 @@ function MetricSection({
   )
 }
 
+function ListCard({
+  title,
+  subtitle,
+  rows,
+  emptyLabel,
+}: {
+  title: string
+  subtitle: string
+  rows: Array<{ id: string; title: string; meta: string; badge?: string }>
+  emptyLabel: string
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+        <p className="mt-1 text-xs text-neutral-500">{subtitle}</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-xs uppercase tracking-[0.18em] text-neutral-400">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((row) => (
+            <div key={row.id} className="flex items-start justify-between gap-4 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-neutral-900">{row.title}</p>
+                <p className="mt-1 text-xs text-neutral-500">{row.meta}</p>
+              </div>
+              {row.badge ? (
+                <span className="shrink-0 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                  {row.badge}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function tabButtonClass(active: boolean) {
   return `rounded-full border px-4 py-2 text-xs font-semibold tracking-[0.18em] uppercase transition ${
     active
@@ -266,6 +308,16 @@ function timelineTypeLabel(type: string) {
 
   return labels[type] || 'Activity'
 }
+
+const SPEND_PROVIDERS: Array<{ key: SpendProviderKey; label: string }> = [
+  { key: 'twilio', label: 'Twilio' },
+  { key: 'aws', label: 'AWS' },
+  { key: 'openai', label: 'OpenAI' },
+  { key: 'claude', label: 'Claude' },
+  { key: 'digitalocean', label: 'DigitalOcean' },
+  { key: 'sendgrid', label: 'SendGrid' },
+  { key: 'other', label: 'Other' },
+]
 
 async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${SALES_API}${path}`, {
@@ -295,7 +347,7 @@ export default function SalesDashboard() {
   const { session, role } = useAuth()
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [activeTab, setActiveTab] = useState<TabKey>('outreach')
   const [overviewDays, setOverviewDays] = useState<OverviewDays>(14)
   const [prospectDays, setProspectDays] = useState<ProspectDays>(30)
   const [prospectStatus, setProspectStatus] = useState<ProspectStatus>('all')
@@ -314,6 +366,18 @@ export default function SalesDashboard() {
   const [reassessingCampaign, setReassessingCampaign] = useState(false)
   const [applyingAssessment, setApplyingAssessment] = useState(false)
   const [reassessInput, setReassessInput] = useState('')
+  const [expectedLeadMin, setExpectedLeadMin] = useState('')
+  const [expectedLeadMax, setExpectedLeadMax] = useState('')
+  const [manualLeadOverride, setManualLeadOverride] = useState('')
+  const [providerSpend, setProviderSpend] = useState<Record<SpendProviderKey, string>>({
+    twilio: '',
+    aws: '',
+    openai: '',
+    claude: '',
+    digitalocean: '',
+    sendgrid: '',
+    other: '',
+  })
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -377,6 +441,35 @@ export default function SalesDashboard() {
     }
   }, [role, session])
 
+  useEffect(() => {
+    if (!campaignConfig) return
+
+    const suggestedMin = Math.max(5, Math.floor(campaignConfig.num_leads_per_run * 0.7))
+    const suggestedMax = Math.max(suggestedMin, Math.ceil(campaignConfig.num_leads_per_run * 1.3))
+
+    setExpectedLeadMin((current) => current || String(suggestedMin))
+    setExpectedLeadMax((current) => current || String(suggestedMax))
+  }, [campaignConfig])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const storageKey = `ivera-sales-admin-spend:${campaignConfig?.product_name || 'default'}`
+    try {
+      const raw = window.localStorage.getItem(storageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      setProviderSpend((current) => ({ ...current, ...parsed }))
+    } catch {
+      // Ignore malformed local cache
+    }
+  }, [campaignConfig?.product_name])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const storageKey = `ivera-sales-admin-spend:${campaignConfig?.product_name || 'default'}`
+    window.localStorage.setItem(storageKey, JSON.stringify(providerSpend))
+  }, [campaignConfig?.product_name, providerSpend])
+
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const campaigns = stats?.campaigns ?? []
@@ -418,6 +511,75 @@ export default function SalesDashboard() {
   const leadActivity = useMemo(
     () => buildLeadActivity(overviewLeads, overviewDays),
     [overviewLeads, overviewDays],
+  )
+
+  const parsedExpectedMin = Number(expectedLeadMin)
+  const parsedExpectedMax = Number(expectedLeadMax)
+  const parsedManualOverride = Number(manualLeadOverride)
+  const hasManualOverride = manualLeadOverride.trim().length > 0 && Number.isFinite(parsedManualOverride)
+  const overrideOutsideRange =
+    hasManualOverride &&
+    Number.isFinite(parsedExpectedMin) &&
+    Number.isFinite(parsedExpectedMax) &&
+    (parsedManualOverride < parsedExpectedMin || parsedManualOverride > parsedExpectedMax)
+
+  const totalProviderSpend = SPEND_PROVIDERS.reduce((sum, provider) => {
+    const amount = Number(providerSpend[provider.key])
+    return sum + (Number.isFinite(amount) ? amount : 0)
+  }, 0)
+
+  const latestCampaignRuns = useMemo(
+    () =>
+      campaigns.slice(0, 4).map((campaign) => ({
+        id: campaign.id,
+        title: campaign.product_name || 'Campaign run',
+        meta: `${campaign.target_description || 'No target description'} · ${timeAgo(campaign.created_at)}`,
+        badge: `${campaign.total_leads || 0} leads`,
+      })),
+    [campaigns],
+  )
+
+  const engagedProspects = useMemo(
+    () =>
+      overviewLeads
+        .filter((lead) => ['replied', 'booked', 'unsubscribed'].includes(lead.status))
+        .slice(0, 6)
+        .map((lead) => ({
+          id: lead.id,
+          title: lead.company || lead.email || 'Prospect',
+          meta: `${lead.email || 'No email'} · ${timeAgo(lead.created_at)}`,
+          badge: lead.status,
+        })),
+    [overviewLeads],
+  )
+
+  const bookedProspects = useMemo(
+    () =>
+      recentLeads
+        .filter((lead) => lead.status === 'booked')
+        .slice(0, 6)
+        .map((lead) => ({
+          id: lead.id,
+          title: lead.company || lead.email || 'Prospect',
+          meta: `${lead.email || 'No email'} · ${timeAgo(lead.created_at)}`,
+          badge: typeof lead.qualify_score === 'number' ? `${lead.qualify_score}/10` : 'booked',
+        })),
+    [recentLeads],
+  )
+
+  const highIntentProspects = useMemo(
+    () =>
+      recentLeads
+        .filter((lead) => (lead.qualify_score ?? 0) >= 7)
+        .sort((a, b) => (b.qualify_score ?? 0) - (a.qualify_score ?? 0))
+        .slice(0, 6)
+        .map((lead) => ({
+          id: lead.id,
+          title: lead.company || lead.email || 'Prospect',
+          meta: `${lead.email || 'No email'} · ${timeAgo(lead.created_at)}`,
+          badge: `${lead.qualify_score}/10`,
+        })),
+    [recentLeads],
   )
 
   const outreachMetrics = [
@@ -465,11 +627,16 @@ export default function SalesDashboard() {
     setAdminActionMessage(null)
 
     try {
+      const requestedLeadCount = hasManualOverride ? Math.round(parsedManualOverride) : undefined
       const data = await salesRequest<{ message: string }>(session.access_token, '/campaign/start', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify(requestedLeadCount ? { num_leads: requestedLeadCount } : {}),
       })
-      setAdminActionMessage(data.message || 'Campaign started.')
+      setAdminActionMessage(
+        requestedLeadCount
+          ? `${data.message || 'Campaign started.'} Manual override: ${requestedLeadCount} leads.`
+          : (data.message || 'Campaign started.'),
+      )
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to start campaign.')
     } finally {
@@ -577,146 +744,34 @@ export default function SalesDashboard() {
         subtitle="Outbound campaign performance and prospect pipeline"
       />
 
-      {role === 'ivera_admin' && (
-        <div className="mb-6 space-y-4">
-          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Admin Controls</p>
-                {configLoading ? (
-                  <p className="text-sm text-neutral-500">Loading current campaign config...</p>
-                ) : campaignConfig ? (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-neutral-900">{campaignConfig.product_name}</p>
-                    <p className="text-xs uppercase tracking-wider text-neutral-500">{campaignConfig.num_leads_per_run} leads per run</p>
-                    <p className="max-w-3xl text-sm leading-relaxed text-neutral-600">{campaignConfig.target_description}</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500">No live campaign config loaded.</p>
-                )}
-
-                <div className="pt-2">
-                  <label
-                    htmlFor="reassess-input"
-                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
-                  >
-                    Reassess Focus
-                  </label>
-                  <textarea
-                    id="reassess-input"
-                    value={reassessInput}
-                    onChange={(event) => setReassessInput(event.target.value)}
-                    rows={4}
-                    placeholder="Example: tighten the ICP around clinics with poor reply rates, reduce fluff in the opening email, and prioritize prospects more likely to book this month."
-                    className="w-full max-w-3xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
-                  />
-                  <p className="mt-2 text-xs text-neutral-500">
-                    Optional guidance for the self-reassess routine. Leave blank for a purely data-driven review.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRunCampaign}
-                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
-                  className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Play size={12} />
-                  {runningCampaign ? 'Starting...' : 'Run Campaign'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReassessCampaign}
-                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
-                  className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles size={12} />
-                  {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
-                </button>
-              </div>
-            </div>
-
-            {adminActionMessage && (
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {adminActionMessage}
-              </div>
-            )}
-            {adminActionError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {adminActionError}
-              </div>
-            )}
-          </div>
-
-          {assessment && (
-            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
-                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Draft</p>
-                  <p className="max-w-3xl text-sm leading-relaxed text-neutral-700">{assessment.summary}</p>
-                  {assessment.changeSet.length > 0 && (
-                    <div className="space-y-2">
-                      {assessment.changeSet.map((change) => (
-                        <div key={`${change.field}-${String(change.to)}`} className="rounded-lg border border-neutral-100 bg-white/70 px-4 py-3">
-                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{change.field.replace(/_/g, ' ')}</p>
-                          <p className="mt-1 text-sm font-medium text-neutral-900">{String(change.from ?? '—')} → {String(change.to ?? '—')}</p>
-                          <p className="mt-1 text-sm text-neutral-600">{change.reason}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {assessment.recommendations.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {assessment.recommendations.map((recommendation) => (
-                        <span key={recommendation} className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-500">
-                          {recommendation}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => applyAssessment(false)}
-                    disabled={applyingAssessment}
-                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {applyingAssessment ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyAssessment(true)}
-                    disabled={applyingAssessment || runningCampaign}
-                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Save + Try Again
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssessment(null)}
-                    disabled={applyingAssessment}
-                    className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 transition hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setActiveTab('overview')}
-          className={tabButtonClass(activeTab === 'overview')}
+          onClick={() => setActiveTab('outreach')}
+          className={tabButtonClass(activeTab === 'outreach')}
         >
-          Overview
+          Outreach
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('engagement')}
+          className={tabButtonClass(activeTab === 'engagement')}
+        >
+          Engagement
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('pipeline')}
+          className={tabButtonClass(activeTab === 'pipeline')}
+        >
+          Pipeline
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('leadQuality')}
+          className={tabButtonClass(activeTab === 'leadQuality')}
+        >
+          Lead Quality
         </button>
         <button
           type="button"
@@ -727,7 +782,7 @@ export default function SalesDashboard() {
         </button>
       </div>
 
-      {activeTab === 'overview' ? (
+      {activeTab === 'outreach' ? (
         <div className="space-y-4">
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-6">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -804,11 +859,82 @@ export default function SalesDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]">
             <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
-            <MetricSection title="Engagement" icon={Reply} metrics={engagementMetrics} />
-            <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
-            <MetricSection title="Lead Quality" icon={Users} metrics={qualityMetrics} />
+            <ListCard
+              title="Recent Runs"
+              subtitle="Latest recorded campaign runs folded into the outreach view"
+              rows={latestCampaignRuns}
+              emptyLabel="No runs yet"
+            />
+          </div>
+        </div>
+      ) : activeTab === 'engagement' ? (
+        <div className="space-y-4">
+          <MetricSection title="Engagement" icon={Reply} metrics={engagementMetrics} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ListCard
+              title="Active Conversations"
+              subtitle="Replies, bookings, and opt-outs in the selected time window"
+              rows={engagedProspects}
+              emptyLabel="No engagement yet"
+            />
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Engagement Notes</h3>
+              <p className="mt-1 text-xs text-neutral-500">Use this view to watch reply pressure and opt-out quality before changing messaging.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {engagementMetrics.map((metric) => (
+                  <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">{metric.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{metric.value}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">{metric.hint}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'pipeline' ? (
+        <div className="space-y-4">
+          <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ListCard
+              title="Booked Prospects"
+              subtitle="Meetings already captured from the current pipeline"
+              rows={bookedProspects}
+              emptyLabel="No meetings booked"
+            />
+            <ListCard
+              title="Fastest Movers"
+              subtitle="Recent leads already showing reply or booking intent"
+              rows={engagedProspects.filter((row) => row.badge !== 'unsubscribed')}
+              emptyLabel="No active movement yet"
+            />
+          </div>
+        </div>
+      ) : activeTab === 'leadQuality' ? (
+        <div className="space-y-4">
+          <MetricSection title="Lead Quality" icon={Users} metrics={qualityMetrics} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <ListCard
+              title="High-Intent Leads"
+              subtitle="Top scored prospects to prioritize for outreach and follow-up"
+              rows={highIntentProspects}
+              emptyLabel="No high-intent leads"
+            />
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Quality Readout</h3>
+              <p className="mt-1 text-xs text-neutral-500">A compact read on whether the current targeting is feeding the right prospects into the pipeline.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {qualityMetrics.map((metric) => (
+                  <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">{metric.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{metric.value}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">{metric.hint}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : (
@@ -913,6 +1039,243 @@ export default function SalesDashboard() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {role === 'ivera_admin' && (
+        <div className="mt-6 space-y-4">
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-4">
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Admin Controls</p>
+                {configLoading ? (
+                  <p className="text-sm text-neutral-500">Loading current campaign config...</p>
+                ) : campaignConfig ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-neutral-900">{campaignConfig.product_name}</p>
+                    <p className="text-xs uppercase tracking-wider text-neutral-500">{campaignConfig.num_leads_per_run} leads per run</p>
+                    <p className="max-w-3xl text-sm leading-relaxed text-neutral-600">{campaignConfig.target_description}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">No live campaign config loaded.</p>
+                )}
+
+                <div className="grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className="space-y-2">
+                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Expected Min Leads</span>
+                    <input
+                      type="number"
+                      min={5}
+                      step={1}
+                      value={expectedLeadMin}
+                      onChange={(event) => setExpectedLeadMin(event.target.value)}
+                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Expected Max Leads</span>
+                    <input
+                      type="number"
+                      min={5}
+                      step={1}
+                      value={expectedLeadMax}
+                      onChange={(event) => setExpectedLeadMax(event.target.value)}
+                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Manual Override This Run</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={manualLeadOverride}
+                      onChange={(event) => setManualLeadOverride(event.target.value)}
+                      placeholder={campaignConfig ? String(campaignConfig.num_leads_per_run) : '40'}
+                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                    />
+                  </label>
+                </div>
+
+                {overrideOutsideRange && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Manual override is outside your expected range for this run. It will still be used when you click <span className="font-medium">Run Campaign</span>.
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <label
+                    htmlFor="reassess-input"
+                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
+                  >
+                    Reassess Focus
+                  </label>
+                  <textarea
+                    id="reassess-input"
+                    value={reassessInput}
+                    onChange={(event) => setReassessInput(event.target.value)}
+                    rows={4}
+                    placeholder="Example: tighten the ICP around clinics with poor reply rates, reduce fluff in the opening email, and prioritize prospects more likely to book this month."
+                    className="w-full max-w-3xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                  />
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Optional guidance for the self-reassess routine. Leave blank for a purely data-driven review.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRunCampaign}
+                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
+                  className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Play size={12} />
+                  {runningCampaign ? 'Starting...' : 'Run Campaign'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReassessCampaign}
+                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
+                  className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Sparkles size={12} />
+                  {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
+                </button>
+              </div>
+            </div>
+
+            {adminActionMessage && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {adminActionMessage}
+              </div>
+            )}
+            {adminActionError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {adminActionError}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-xl space-y-2">
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Spend Tracker</p>
+                <p className="text-sm text-neutral-700">
+                  Track monthly actual spend for each provider in one place. These values are manual and stored in this browser for now.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-2 md:grid-cols-4">
+                  <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Emails Sent</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{totals.emailed}</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Campaign Runs</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{campaigns.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Replies</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{totals.replied}</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Booked</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{totals.booked}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-full max-w-3xl space-y-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {SPEND_PROVIDERS.map((provider) => (
+                    <label key={provider.key} className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">{provider.label}</span>
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={providerSpend[provider.key]}
+                          onChange={(event) =>
+                            setProviderSpend((current) => ({
+                              ...current,
+                              [provider.key]: event.target.value,
+                            }))
+                          }
+                          className="w-full rounded-xl border border-neutral-200 bg-white/80 py-3 pl-8 pr-4 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                        />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-4 text-white">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
+                  <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
+                  <p className="mt-1 text-xs text-neutral-400">Manual actuals for Twilio, AWS, OpenAI, Claude, DigitalOcean, SendGrid, and any other related vendor costs.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {assessment && (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-3">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Draft</p>
+                  <p className="max-w-3xl text-sm leading-relaxed text-neutral-700">{assessment.summary}</p>
+                  {assessment.changeSet.length > 0 && (
+                    <div className="space-y-2">
+                      {assessment.changeSet.map((change) => (
+                        <div key={`${change.field}-${String(change.to)}`} className="rounded-lg border border-neutral-100 bg-white/70 px-4 py-3">
+                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{change.field.replace(/_/g, ' ')}</p>
+                          <p className="mt-1 text-sm font-medium text-neutral-900">{String(change.from ?? '—')} → {String(change.to ?? '—')}</p>
+                          <p className="mt-1 text-sm text-neutral-600">{change.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {assessment.recommendations.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {assessment.recommendations.map((recommendation) => (
+                        <span key={recommendation} className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-500">
+                          {recommendation}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyAssessment(false)}
+                    disabled={applyingAssessment}
+                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {applyingAssessment ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyAssessment(true)}
+                    disabled={applyingAssessment || runningCampaign}
+                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Save + Try Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssessment(null)}
+                    disabled={applyingAssessment}
+                    className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 transition hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
