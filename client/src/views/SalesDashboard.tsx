@@ -360,7 +360,13 @@ const SPEND_PROVIDERS: Array<{ key: SpendProviderKey; label: string }> = [
   { key: 'other', label: 'Other' },
 ]
 
-const AUTO_SYNC_PROVIDER_KEYS = new Set<SpendProviderKey>(['openai', 'claude', 'twilio'])
+const AUTO_SYNC_PROVIDER_KEYS = new Set<SpendProviderKey>([
+  'openai',
+  'claude',
+  'twilio',
+  'digitalocean',
+  'aws',
+])
 
 async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${SALES_API}${path}`, {
@@ -1401,7 +1407,7 @@ export default function SalesDashboard() {
                 <div className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-4 text-white">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
                   <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-neutral-400">Auto-sync is live for OpenAI, Claude, and Twilio. The rest stay editable here until we wire their billing APIs too.</p>
+                  <p className="mt-1 text-xs text-neutral-400">Auto-sync is live for OpenAI, Claude, Twilio, DigitalOcean, and AWS. The rest stay editable here until we wire their billing APIs too.</p>
                 </div>
 
                 <div className="flex items-center justify-between gap-3">

@@ -1,3 +1,7 @@
+import {
+  CostExplorerClient,
+  GetCostAndUsageCommand,
+} from '@aws-sdk/client-cost-explorer'
 import { listProviderSpend, upsertProviderSpend, type ProviderSpendEntry } from '../models/spendModel'
 
 interface SyncSkip {
@@ -12,7 +16,7 @@ interface SyncSummary {
   skippedProviders: SyncSkip[]
 }
 
-const SUPPORTED_PROVIDER_SLUGS = ['openai', 'claude', 'twilio'] as const
+const SUPPORTED_PROVIDER_SLUGS = ['openai', 'claude', 'twilio', 'digitalocean', 'aws'] as const
 
 function monthStart(month: string): Date {
   if (!/^\d{4}-\d{2}$/.test(month)) {
@@ -197,6 +201,97 @@ async function fetchTwilioMonthSpend(month: string): Promise<number> {
   return Number(Math.abs(rawTotal).toFixed(2))
 }
 
+async function fetchDigitalOceanMonthSpend(month: string): Promise<number> {
+  const token = process.env.DIGITALOCEAN_TOKEN || process.env.DO_API_TOKEN
+  const accountUrn =
+    process.env.DIGITALOCEAN_BILLING_ACCOUNT_URN ||
+    process.env.DIGITALOCEAN_ACCOUNT_URN ||
+    process.env.DO_BILLING_ACCOUNT_URN
+
+  if (!token) {
+    throw new Error('Missing DIGITALOCEAN_TOKEN or DO_API_TOKEN')
+  }
+
+  if (!accountUrn) {
+    throw new Error('Missing DIGITALOCEAN_BILLING_ACCOUNT_URN')
+  }
+
+  const start = monthStart(month)
+  const end = monthEndExclusive(start)
+  const endInclusive = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+  let page = 1
+  let totalPages = 1
+  let total = 0
+
+  while (page <= totalPages) {
+    const json = await fetchJson(
+      `https://api.digitalocean.com/v2/billing/${encodeURIComponent(accountUrn)}/insights/${toIsoDay(start)}/${toIsoDay(endInclusive)}?per_page=200&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
+    const payload = json as {
+      data_points?: Array<{ total_amount?: unknown }>
+      total_pages?: unknown
+    }
+
+    total += (payload.data_points ?? []).reduce(
+      (sum, point) => sum + (parseMoneyValue(point.total_amount) ?? 0),
+      0,
+    )
+
+    totalPages = Math.max(1, parseMoneyValue(payload.total_pages) ?? 1)
+    page += 1
+  }
+
+  return Number(total.toFixed(2))
+}
+
+async function fetchAwsMonthSpend(month: string): Promise<number> {
+  const accessKeyId = process.env.AWS_BILLING_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID
+  const secretAccessKey =
+    process.env.AWS_BILLING_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY
+  const sessionToken = process.env.AWS_BILLING_SESSION_TOKEN || process.env.AWS_SESSION_TOKEN
+  const region = process.env.AWS_BILLING_REGION || process.env.AWS_REGION || 'us-east-1'
+
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('Missing AWS_BILLING_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID')
+  }
+
+  const start = monthStart(month)
+  const end = monthEndExclusive(start)
+  const client = new CostExplorerClient({
+    region,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+      ...(sessionToken ? { sessionToken } : {}),
+    },
+  })
+
+  const result = await client.send(
+    new GetCostAndUsageCommand({
+      TimePeriod: {
+        Start: toIsoDay(start),
+        End: toIsoDay(end),
+      },
+      Granularity: 'MONTHLY',
+      Metrics: ['UnblendedCost'],
+    }),
+  )
+
+  const amount = result.ResultsByTime?.reduce((sum, item) => {
+    const raw = item.Total?.UnblendedCost?.Amount
+    return sum + (parseMoneyValue(raw) ?? 0)
+  }, 0) ?? 0
+
+  return Number(amount.toFixed(2))
+}
+
 export async function syncProviderSpend(month: string, userId: string): Promise<SyncSummary> {
   const existing = await listProviderSpend(month)
   const existingByProvider = new Map(existing.map((entry) => [entry.providerSlug, entry]))
@@ -212,7 +307,11 @@ export async function syncProviderSpend(month: string, userId: string): Promise<
           ? await fetchOpenAiMonthSpend(month)
           : providerSlug === 'claude'
             ? await fetchAnthropicMonthSpend(month)
-            : await fetchTwilioMonthSpend(month)
+            : providerSlug === 'twilio'
+              ? await fetchTwilioMonthSpend(month)
+              : providerSlug === 'digitalocean'
+                ? await fetchDigitalOceanMonthSpend(month)
+                : await fetchAwsMonthSpend(month)
 
       syncedEntries.set(providerSlug, {
         providerSlug,
