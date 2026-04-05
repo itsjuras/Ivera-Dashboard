@@ -149,12 +149,12 @@ function MetricGroup({
         </div>
         <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/60 p-4">
+          <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/60 p-3">
             <p className="text-[11px] tracking-widest uppercase text-neutral-400">{metric.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-neutral-900">{metric.value}</p>
-            <p className="mt-1 text-xs text-neutral-500">{metric.hint}</p>
+            <p className="mt-1.5 text-xl font-semibold text-neutral-900 leading-none">{metric.value}</p>
+            <p className="mt-1 text-[11px] text-neutral-500 leading-snug">{metric.hint}</p>
           </div>
         ))}
       </div>
@@ -257,7 +257,7 @@ export default function SalesDashboard() {
         subtitle="Outbound campaign performance and prospect pipeline"
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 mb-6">
         <MetricGroup title="Outreach" icon={Send} metrics={outreachMetrics} />
         <MetricGroup title="Engagement" icon={Reply} metrics={engagementMetrics} />
         <MetricGroup title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
