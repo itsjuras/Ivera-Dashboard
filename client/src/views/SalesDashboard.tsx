@@ -39,7 +39,16 @@ interface PortalStats {
   campaigns: Array<{
     id: string
     product_name: string
+    target_description: string
     created_at: string
+    total_leads: number
+    qualified_leads: number
+    emailed: number
+    replied: number
+    booked: number
+    unsubscribed: number
+    avg_score: number | null
+    last_lead_at: string | null
   }>
 }
 
@@ -97,6 +106,11 @@ function recentReplyCount(leads: PortalStats['recentLeads']) {
 function latestRunLabel(campaigns: PortalStats['campaigns']) {
   if (campaigns.length === 0) return 'No runs yet'
   return `Latest ${timeAgo(campaigns[0].created_at)}`
+}
+
+function shortTarget(target: string) {
+  if (!target) return 'No target description'
+  return target.length > 72 ? `${target.slice(0, 72)}...` : target
 }
 
 function buildLeadActivity(leads: PortalStats['recentLeads']) {
@@ -311,16 +325,67 @@ export default function SalesDashboard() {
           ) : (
             <div className="space-y-3">
               {campaigns.map((c) => (
-                <div key={c.id} className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-neutral-900 truncate">{c.product_name}</p>
-                    <p className="text-xs text-neutral-400 mt-0.5">
-                      Started {timeAgo(c.created_at)}
-                    </p>
+                <div key={c.id} className="rounded-xl border border-neutral-100 bg-white/60 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 truncate">{c.product_name}</p>
+                      <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                        {shortTarget(c.target_description)}
+                      </p>
+                      <p className="text-xs text-neutral-400 mt-2">
+                        Started {timeAgo(c.created_at)}
+                        {c.last_lead_at ? ` · latest lead ${timeAgo(c.last_lead_at)}` : ''}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-2.5 py-1 rounded-full tracking-widest font-medium uppercase shrink-0 ${statusColors.completed}`}>
+                      run
+                    </span>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full tracking-widest font-medium uppercase shrink-0 ml-3 ${statusColors.completed}`}>
-                    run
-                  </span>
+
+                  <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Leads</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.total_leads}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Total discovered in run</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.qualified_leads}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Score 7/10 or higher</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.replied}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Booked included</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.booked}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Meetings from run</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Emailed</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.emailed}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Sent successfully</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsubscribed</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.unsubscribed}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Opt-outs from run</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Avg Score</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">
+                        {c.avg_score === null ? '—' : `${c.avg_score}/10`}
+                      </p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Lead quality average</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run ID</p>
+                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.id.slice(0, 8)}</p>
+                      <p className="mt-1 text-[11px] text-neutral-500">Reference</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
