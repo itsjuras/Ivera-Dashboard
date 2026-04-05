@@ -113,6 +113,11 @@ function shortTarget(target: string) {
   return target.length > 72 ? `${target.slice(0, 72)}...` : target
 }
 
+function formatRunMetricValue(value: number | null | undefined, suffix = '') {
+  if (value == null || Number.isNaN(value)) return null
+  return `${value}${suffix}`
+}
+
 function buildLeadActivity(leads: PortalStats['recentLeads']) {
   const byDay = new Map<string, { day: string; sent: number; replied: number; booked: number }>()
 
@@ -342,48 +347,28 @@ export default function SalesDashboard() {
                     </span>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Leads</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.total_leads}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Total discovered in run</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.qualified_leads}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Score 7/10 or higher</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.replied}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Booked included</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.booked}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Meetings from run</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Emailed</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.emailed}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Sent successfully</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsubscribed</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.unsubscribed}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Opt-outs from run</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Avg Score</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">
-                        {c.avg_score === null ? '—' : `${c.avg_score}/10`}
-                      </p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Lead quality average</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/70 p-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run ID</p>
-                      <p className="mt-1.5 text-lg font-semibold text-neutral-900">{c.id.slice(0, 8)}</p>
-                      <p className="mt-1 text-[11px] text-neutral-500">Reference</p>
+                  <div className="mt-4 rounded-lg border border-neutral-100 bg-white/70 px-4 py-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-x-4 gap-y-3">
+                      {[
+                        { label: 'Leads', value: formatRunMetricValue(c.total_leads) },
+                        { label: 'Qualified', value: formatRunMetricValue(c.qualified_leads) },
+                        { label: 'Emailed', value: formatRunMetricValue(c.emailed) },
+                        { label: 'Replies', value: formatRunMetricValue(c.replied) },
+                        { label: 'Booked', value: formatRunMetricValue(c.booked) },
+                        { label: 'Unsubscribed', value: formatRunMetricValue(c.unsubscribed) },
+                        { label: 'Avg Score', value: c.avg_score == null ? null : `${c.avg_score}/10` },
+                      ]
+                        .filter((metric) => metric.value !== null)
+                        .map((metric) => (
+                          <div key={metric.label} className="min-w-0">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">{metric.label}</p>
+                            <p className="mt-1 text-base font-semibold text-neutral-900 leading-none">{metric.value}</p>
+                          </div>
+                        ))}
+                      <div className="min-w-0">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run ID</p>
+                        <p className="mt-1 text-base font-semibold text-neutral-900 leading-none">{c.id.slice(0, 8)}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
