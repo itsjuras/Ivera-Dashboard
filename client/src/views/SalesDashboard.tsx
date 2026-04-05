@@ -121,7 +121,20 @@ type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'leadQuality' | 'prospects'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
-type SpendProviderKey = 'twilio' | 'aws' | 'openai' | 'claude' | 'digitalocean' | 'sendgrid' | 'other'
+type SpendProviderKey =
+  | 'twilio'
+  | 'aws'
+  | 'openai'
+  | 'claude'
+  | 'digitalocean'
+  | 'sendgrid'
+  | 'exa'
+  | 'supabase'
+  | 'vercel'
+  | 'stripe'
+  | 'deepgram'
+  | 'cal'
+  | 'other'
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -316,6 +329,12 @@ const SPEND_PROVIDERS: Array<{ key: SpendProviderKey; label: string }> = [
   { key: 'claude', label: 'Claude' },
   { key: 'digitalocean', label: 'DigitalOcean' },
   { key: 'sendgrid', label: 'SendGrid' },
+  { key: 'exa', label: 'Exa' },
+  { key: 'supabase', label: 'Supabase' },
+  { key: 'vercel', label: 'Vercel' },
+  { key: 'stripe', label: 'Stripe' },
+  { key: 'deepgram', label: 'Deepgram' },
+  { key: 'cal', label: 'Cal.com' },
   { key: 'other', label: 'Other' },
 ]
 
@@ -376,6 +395,12 @@ export default function SalesDashboard() {
     claude: '',
     digitalocean: '',
     sendgrid: '',
+    exa: '',
+    supabase: '',
+    vercel: '',
+    stripe: '',
+    deepgram: '',
+    cal: '',
     other: '',
   })
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
@@ -1215,7 +1240,7 @@ export default function SalesDashboard() {
                 <div className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-4 text-white">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
                   <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-neutral-400">Manual actuals for Twilio, AWS, OpenAI, Claude, DigitalOcean, SendGrid, and any other related vendor costs.</p>
+                  <p className="mt-1 text-xs text-neutral-400">Manual actuals for the suppliers this stack currently uses: Twilio, AWS, OpenAI, Claude, DigitalOcean, SendGrid, Exa, Supabase, Vercel, Stripe, Deepgram, Cal.com, and any other related vendor costs.</p>
                 </div>
               </div>
             </div>
