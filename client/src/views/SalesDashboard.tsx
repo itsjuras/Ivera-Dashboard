@@ -21,6 +21,7 @@ import {
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 import {
+  fetchExaUsage,
   fetchProviderSpend,
   fetchSendGridUsage,
   saveProviderSpend,
@@ -449,6 +450,16 @@ export default function SalesDashboard() {
     creditsTotal: number | null
     usedQuotaPercent: number | null
   } | null>(null)
+  const [exaUsage, setExaUsage] = useState<{
+    totalCostUsd: number | null
+    apiKeyName: string | null
+    breakdownCount: number
+    topLineItems: Array<{
+      priceName: string
+      quantity: number | null
+      amountUsd: number | null
+    }>
+  } | null>(null)
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -570,6 +581,30 @@ export default function SalesDashboard() {
       })
       .finally(() => {
         if (!cancelled) setSpendLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [role, spendMonth])
+
+  useEffect(() => {
+    if (role !== 'ivera_admin') return
+
+    let cancelled = false
+
+    fetchExaUsage(spendMonth)
+      .then((data) => {
+        if (cancelled) return
+        setExaUsage({
+          totalCostUsd: data.totalCostUsd,
+          apiKeyName: data.apiKeyName,
+          breakdownCount: data.breakdownCount,
+          topLineItems: data.topLineItems,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setExaUsage(null)
       })
 
     return () => {
@@ -1471,6 +1506,64 @@ export default function SalesDashboard() {
                   ) : (
                     <p className="mt-2 text-xs text-neutral-500">
                       Usage helper unavailable right now. SendGrid spend stays manual.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-neutral-200 bg-white/80 px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Exa Usage</p>
+                  {exaUsage ? (
+                    <div className="mt-2 space-y-3">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div>
+                          <p className="text-xs text-neutral-500">Total Cost (USD)</p>
+                          <p className="mt-1 text-lg font-semibold text-neutral-900">
+                            {exaUsage.totalCostUsd !== null && exaUsage.totalCostUsd !== undefined
+                              ? `$${exaUsage.totalCostUsd.toFixed(2)}`
+                              : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-neutral-500">API Key</p>
+                          <p className="mt-1 text-sm font-semibold text-neutral-900">
+                            {exaUsage.apiKeyName || 'Configured key'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-neutral-500">Line Items</p>
+                          <p className="mt-1 text-lg font-semibold text-neutral-900">
+                            {exaUsage.breakdownCount}
+                          </p>
+                        </div>
+                      </div>
+                      {exaUsage.topLineItems.length > 0 ? (
+                        <div className="space-y-2">
+                          {exaUsage.topLineItems.map((item) => (
+                            <div
+                              key={`${item.priceName}-${item.amountUsd ?? 'na'}`}
+                              className="flex items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-white px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-neutral-900">{item.priceName}</p>
+                                <p className="text-xs text-neutral-500">
+                                  {item.quantity !== null && item.quantity !== undefined
+                                    ? `${item.quantity} units`
+                                    : 'Usage quantity unavailable'}
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold text-neutral-900">
+                                {item.amountUsd !== null && item.amountUsd !== undefined
+                                  ? `$${item.amountUsd.toFixed(2)}`
+                                  : '—'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-neutral-500">
+                      Exa usage helper unavailable right now. This needs `EXA_SERVICE_API_KEY` and `EXA_API_KEY_ID` on the server.
                     </p>
                   )}
                 </div>

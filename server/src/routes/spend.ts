@@ -2,6 +2,7 @@ import { Router } from 'express'
 import type { RequestHandler } from 'express'
 import { requireIveraAdmin } from '../middleware/requireAuth'
 import {
+  getExaUsage,
   getProviderSpend,
   saveProviderSpend,
   syncProviderSpendController,
@@ -15,6 +16,7 @@ const h = (fn: (...args: any[]) => unknown) => fn as unknown as RequestHandler
 
 router.get('/', iveraAdmin, h(getProviderSpend))
 router.get('/sendgrid-usage', iveraAdmin, h(getSendGridUsage))
+router.get('/exa-usage', iveraAdmin, h(getExaUsage))
 router.put('/', iveraAdmin, h(saveProviderSpend))
 router.post('/sync', iveraAdmin, h(syncProviderSpendController))
 

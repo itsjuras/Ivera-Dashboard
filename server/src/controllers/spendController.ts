@@ -1,7 +1,7 @@
 import type { Response } from 'express'
 import type { AuthRequest } from '../middleware/requireAuth'
 import { listProviderSpend, upsertProviderSpend } from '../models/spendModel'
-import { fetchSendGridUsage, syncProviderSpend } from '../lib/providerSpendSync'
+import { fetchExaUsage, fetchSendGridUsage, syncProviderSpend } from '../lib/providerSpendSync'
 
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7)
@@ -79,6 +79,18 @@ export async function getSendGridUsage(req: AuthRequest, res: Response): Promise
   } catch (err: unknown) {
     console.error('getSendGridUsage failed:', err)
     const message = err instanceof Error ? err.message : 'Failed to load SendGrid usage'
+    res.status(500).json({ error: message })
+  }
+}
+
+export async function getExaUsage(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : currentMonth()
+    const usage = await fetchExaUsage(month)
+    res.json(usage)
+  } catch (err: unknown) {
+    console.error('getExaUsage failed:', err)
+    const message = err instanceof Error ? err.message : 'Failed to load Exa usage'
     res.status(500).json({ error: message })
   }
 }

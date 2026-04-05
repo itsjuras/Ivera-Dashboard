@@ -120,6 +120,18 @@ export interface SendGridUsageSummary {
   creditsTotal: number | null
 }
 
+export interface ExaUsageSummary {
+  month: string
+  totalCostUsd: number | null
+  apiKeyName: string | null
+  breakdownCount: number
+  topLineItems: Array<{
+    priceName: string
+    quantity: number | null
+    amountUsd: number | null
+  }>
+}
+
 export type Role = 'ivera_admin' | 'customer'
 
 export interface UserProduct {
@@ -296,4 +308,10 @@ export function fetchSendGridUsage(
   month: string,
 ): Promise<SendGridUsageSummary> {
   return authGet(`/api/spend/sendgrid-usage?month=${encodeURIComponent(month)}`)
+}
+
+export function fetchExaUsage(
+  month: string,
+): Promise<ExaUsageSummary> {
+  return authGet(`/api/spend/exa-usage?month=${encodeURIComponent(month)}`)
 }

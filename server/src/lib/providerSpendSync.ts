@@ -23,6 +23,18 @@ export interface SendGridUsageSummary {
   creditsTotal: number | null
 }
 
+export interface ExaUsageSummary {
+  month: string
+  totalCostUsd: number | null
+  apiKeyName: string | null
+  breakdownCount: number
+  topLineItems: Array<{
+    priceName: string
+    quantity: number | null
+    amountUsd: number | null
+  }>
+}
+
 const SUPPORTED_PROVIDER_SLUGS = ['openai', 'claude', 'twilio', 'digitalocean', 'aws'] as const
 
 function monthStart(month: string): Date {
@@ -117,6 +129,61 @@ export async function fetchSendGridUsage(month: string): Promise<SendGridUsageSu
     creditsTotal,
     usedQuotaPercent:
       usedQuotaPercent !== null && Number.isFinite(usedQuotaPercent) ? usedQuotaPercent : null,
+  }
+}
+
+export async function fetchExaUsage(month: string): Promise<ExaUsageSummary> {
+  const serviceKey = process.env.EXA_SERVICE_API_KEY
+  const apiKeyId = process.env.EXA_API_KEY_ID
+
+  if (!serviceKey) {
+    throw new Error('Missing EXA_SERVICE_API_KEY')
+  }
+
+  if (!apiKeyId) {
+    throw new Error('Missing EXA_API_KEY_ID')
+  }
+
+  const start = monthStart(month)
+  const end = monthEndExclusive(start)
+  const params = new URLSearchParams({
+    start_date: start.toISOString(),
+    end_date: new Date(end.getTime() - 1000).toISOString(),
+    group_by: 'day',
+  })
+
+  const json = await fetchJson(
+    `https://admin-api.exa.ai/team-management/api-keys/${encodeURIComponent(apiKeyId)}/usage?${params.toString()}`,
+    {
+      headers: {
+        'x-api-key': serviceKey,
+        'Content-Type': 'application/json',
+      },
+    },
+  )
+
+  const payload = json as {
+    api_key_name?: unknown
+    total_cost_usd?: unknown
+    cost_breakdown?: Array<{
+      price_name?: unknown
+      quantity?: unknown
+      amount_usd?: unknown
+    }>
+  }
+
+  const costBreakdown = payload.cost_breakdown ?? []
+
+  return {
+    month,
+    totalCostUsd: parseMoneyValue(payload.total_cost_usd),
+    apiKeyName: typeof payload.api_key_name === 'string' ? payload.api_key_name : null,
+    breakdownCount: costBreakdown.length,
+    topLineItems: costBreakdown.slice(0, 3).map((item) => ({
+      priceName: typeof item.price_name === 'string' ? item.price_name : 'Exa usage',
+      quantity: parseMoneyValue(item.quantity),
+      amountUsd: parseMoneyValue(item.amount_usd),
+    })),
   }
 }
 
