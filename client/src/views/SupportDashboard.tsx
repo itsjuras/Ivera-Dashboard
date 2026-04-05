@@ -31,6 +31,7 @@ interface KBArticle {
   title: string
   source_type: string
   source_url?: string
+  content?: string
   created_at: string
 }
 
@@ -67,6 +68,7 @@ export default function SupportDashboard() {
   const [messages, setMessages] = useState<Message[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
+  const [selectedArticle, setSelectedArticle] = useState<KBArticle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reply, setReply] = useState('')
@@ -76,9 +78,13 @@ export default function SupportDashboard() {
   const [ingestTitle, setIngestTitle] = useState('')
   const [ingesting, setIngesting] = useState(false)
 
-  const headers = useCallback(() => ({
+  const authHeaders = useCallback(() => ({
+    Authorization: `Bearer ${session?.access_token}`,
+  }), [session])
+
+  const jsonHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${session?.access_token}`,
+    Authorization: `Bearer ${session?.access_token}`,
   }), [session])
 
   const load = useCallback(async () => {
@@ -87,9 +93,9 @@ export default function SupportDashboard() {
     setError(null)
     try {
       const [statsRes, ticketsRes, kbRes] = await Promise.all([
-        fetch(`${API}/support/stats`, { headers: headers() }),
-        fetch(`${API}/support/tickets?limit=100`, { headers: headers() }),
-        fetch(`${API}/support/kb`, { headers: headers() }),
+        fetch(`${API}/support/stats`, { headers: authHeaders() }),
+        fetch(`${API}/support/tickets?limit=100`, { headers: authHeaders() }),
+        fetch(`${API}/support/kb`, { headers: authHeaders() }),
       ])
       if (!statsRes.ok || !ticketsRes.ok || !kbRes.ok) {
         const status = [statsRes.status, ticketsRes.status, kbRes.status].find((code) => code >= 400) ?? 500
@@ -106,13 +112,13 @@ export default function SupportDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [session, headers])
+  }, [session, authHeaders])
 
   useEffect(() => { load() }, [load])
 
   async function openTicket(ticket: Ticket) {
     setSelected(ticket)
-    const res = await fetch(`${API}/support/tickets/${ticket.id}`, { headers: headers() })
+    const res = await fetch(`${API}/support/tickets/${ticket.id}`, { headers: authHeaders() })
     if (res.ok) { const d = await res.json(); setMessages(d.messages || []) }
   }
 
@@ -121,7 +127,7 @@ export default function SupportDashboard() {
     setSending(true)
     await fetch(`${API}/support/tickets/${selected.id}/reply`, {
       method: 'POST',
-      headers: headers(),
+      headers: jsonHeaders(),
       body: JSON.stringify({ body: reply }),
     })
     setReply('')
@@ -131,13 +137,14 @@ export default function SupportDashboard() {
 
   async function closeTicket() {
     if (!selected) return
-    await fetch(`${API}/support/tickets/${selected.id}/close`, { method: 'POST', headers: headers() })
+    await fetch(`${API}/support/tickets/${selected.id}/close`, { method: 'POST', headers: authHeaders() })
     setSelected(null)
     load()
   }
 
   async function deleteKb(id: string) {
-    await fetch(`${API}/support/kb/${id}`, { method: 'DELETE', headers: headers() })
+    await fetch(`${API}/support/kb/${id}`, { method: 'DELETE', headers: authHeaders() })
+    if (selectedArticle?.id === id) setSelectedArticle(null)
     load()
   }
 
@@ -145,7 +152,7 @@ export default function SupportDashboard() {
     if (!ingestUrl.trim()) return
     setIngesting(true)
     await fetch(`${API}/support/kb/ingest-url`, {
-      method: 'POST', headers: headers(),
+      method: 'POST', headers: jsonHeaders(),
       body: JSON.stringify({ url: ingestUrl }),
     })
     setIngestUrl('')
@@ -157,7 +164,7 @@ export default function SupportDashboard() {
     if (!ingestText.trim() || !ingestTitle.trim()) return
     setIngesting(true)
     await fetch(`${API}/support/kb/ingest-text`, {
-      method: 'POST', headers: headers(),
+      method: 'POST', headers: jsonHeaders(),
       body: JSON.stringify({ title: ingestTitle, text: ingestText, source_type: 'manual' }),
     })
     setIngestText('')
@@ -360,11 +367,15 @@ export default function SupportDashboard() {
                 <h3 className="text-xs font-semibold tracking-widest uppercase text-neutral-900 mb-3">{kbArticles.length} Articles</h3>
                 <div className="space-y-2">
                   {kbArticles.map(a => (
-                    <div key={a.id} className="flex items-center justify-between px-4 py-3 bg-neutral-50 border border-neutral-100 rounded-xl">
-                      <div>
+                    <div key={a.id} className="flex items-center justify-between gap-4 px-4 py-3 bg-neutral-50 border border-neutral-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArticle(a)}
+                        className="min-w-0 flex-1 text-left"
+                      >
                         <div className="text-xs font-medium text-neutral-900">{a.title}</div>
                         <div className="text-xs text-neutral-400 uppercase tracking-wider mt-0.5">{a.source_type} · {new Date(a.created_at).toLocaleDateString()}</div>
-                      </div>
+                      </button>
                       <button onClick={() => deleteKb(a.id)} className="text-neutral-300 hover:text-red-500 transition-colors ml-4"><Trash2 size={13} /></button>
                     </div>
                   ))}
@@ -380,12 +391,44 @@ export default function SupportDashboard() {
             <div className="max-w-lg">
               <div className="bg-neutral-50 border border-neutral-100 rounded-xl p-6 space-y-4">
                 <h3 className="text-xs font-semibold tracking-widest uppercase text-neutral-900 flex items-center gap-2"><MessageSquare size={14} />Support Configuration</h3>
-                <SupportConfig headers={headers} />
+                <SupportConfig headers={jsonHeaders} />
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {selectedArticle && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Knowledge Base Article</p>
+                <h3 className="mt-1 text-lg font-semibold text-neutral-900">{selectedArticle.title}</h3>
+                <p className="mt-1 text-xs uppercase tracking-wider text-neutral-500">
+                  {selectedArticle.source_type} · {new Date(selectedArticle.created_at).toLocaleDateString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedArticle(null)}
+                className="rounded-full border border-neutral-200 px-3 py-2 text-xs uppercase tracking-wider text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="overflow-y-auto px-6 py-5">
+              {selectedArticle.content ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
+                  {selectedArticle.content}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">This article has no stored body content.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

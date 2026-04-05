@@ -157,7 +157,7 @@ export default function SpendTrackerPanel() {
         })
       })
       .catch((err) => {
-        if (!cancelled) return
+        if (cancelled) return
         setSendGridUsage(null)
         setSendGridUsageError(err instanceof Error ? err.message : 'Could not load SendGrid usage.')
       })
@@ -182,7 +182,7 @@ export default function SpendTrackerPanel() {
         })
       })
       .catch((err) => {
-        if (!cancelled) return
+        if (cancelled) return
         setExaUsage(null)
         setExaUsageError(err instanceof Error ? err.message : 'Could not load Exa usage.')
       })

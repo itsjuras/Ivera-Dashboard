@@ -364,6 +364,8 @@ export default function SalesDashboard() {
     unsubscribed: false,
   })
   const [campaignConfig, setCampaignConfig] = useState<CampaignConfig | null>(null)
+  const [editableTargetDescription, setEditableTargetDescription] = useState('')
+  const [savingDescription, setSavingDescription] = useState(false)
   const [configLoading, setConfigLoading] = useState(false)
   const [adminActionMessage, setAdminActionMessage] = useState<string | null>(null)
   const [adminActionError, setAdminActionError] = useState<string | null>(null)
@@ -423,7 +425,10 @@ export default function SalesDashboard() {
 
     salesRequest<{ config: CampaignConfig }>(session.access_token, '/campaign/config')
       .then((data) => {
-        if (!cancelled) setCampaignConfig(data.config)
+        if (!cancelled) {
+          setCampaignConfig(data.config)
+          setEditableTargetDescription(data.config.target_description || '')
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) setAdminActionError(err.message)
@@ -446,6 +451,10 @@ export default function SalesDashboard() {
     setExpectedLeadMin((current) => current || String(suggestedMin))
     setExpectedLeadMax((current) => current || String(suggestedMax))
   }, [campaignConfig])
+
+  useEffect(() => {
+    setEditableTargetDescription(campaignConfig?.target_description || '')
+  }, [campaignConfig?.target_description])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
@@ -671,6 +680,28 @@ export default function SalesDashboard() {
     }
   }
 
+  async function saveCampaignDescription() {
+    if (!session?.access_token || !campaignConfig) return
+    setSavingDescription(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ config: CampaignConfig; message: string }>(session.access_token, '/campaign/config', {
+        method: 'PATCH',
+        body: JSON.stringify({ target_description: editableTargetDescription }),
+      })
+      setCampaignConfig(data.config)
+      setEditableTargetDescription(data.config.target_description || '')
+      setAdminActionMessage(data.message || 'Campaign description saved.')
+      await refreshStats()
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to save campaign description.')
+    } finally {
+      setSavingDescription(false)
+    }
+  }
+
   async function openProspectHistory(leadId: string) {
     if (!session?.access_token) return
     setSelectedLeadId(leadId)
@@ -847,12 +878,6 @@ export default function SalesDashboard() {
 
           <div className="space-y-4">
             <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
-            <ListCard
-              title="Recent Runs"
-              subtitle="Latest recorded campaign runs with full targeting descriptions visible"
-              rows={latestCampaignRuns}
-              emptyLabel="No runs yet"
-            />
           </div>
         </div>
       ) : activeTab === 'engagement' ? (
@@ -1042,7 +1067,6 @@ export default function SalesDashboard() {
                   <div className="space-y-1">
                     <p className="text-sm font-semibold text-neutral-900">{campaignConfig.product_name}</p>
                     <p className="text-xs uppercase tracking-wider text-neutral-500">{campaignConfig.num_leads_per_run} leads per run</p>
-                    <p className="max-w-3xl text-sm leading-relaxed text-neutral-600">{campaignConfig.target_description}</p>
                   </div>
                 ) : (
                   <p className="text-sm text-neutral-500">No live campaign config loaded.</p>
@@ -1093,6 +1117,22 @@ export default function SalesDashboard() {
 
                 <div className="pt-2">
                   <label
+                    htmlFor="campaign-description"
+                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
+                  >
+                    Campaign Description
+                  </label>
+                  <textarea
+                    id="campaign-description"
+                    value={editableTargetDescription}
+                    onChange={(event) => setEditableTargetDescription(event.target.value)}
+                    rows={6}
+                    className="w-full max-w-4xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <label
                     htmlFor="reassess-input"
                     className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
                   >
@@ -1110,27 +1150,35 @@ export default function SalesDashboard() {
                     Optional guidance for the self-reassess routine. Leave blank for a purely data-driven review.
                   </p>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRunCampaign}
-                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
-                  className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Play size={12} />
-                  {runningCampaign ? 'Starting...' : 'Run Campaign'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReassessCampaign}
-                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
-                  className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Sparkles size={12} />
-                  {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={saveCampaignDescription}
+                    disabled={savingDescription || runningCampaign || reassessingCampaign || applyingAssessment}
+                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingDescription ? 'Saving...' : 'Save Description'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReassessCampaign}
+                    disabled={runningCampaign || reassessingCampaign || applyingAssessment || savingDescription}
+                    className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Sparkles size={12} />
+                    {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRunCampaign}
+                    disabled={runningCampaign || reassessingCampaign || applyingAssessment || savingDescription}
+                    className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Play size={12} />
+                    {runningCampaign ? 'Starting...' : 'Run Campaign'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1217,6 +1265,17 @@ export default function SalesDashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'outreach' && (
+        <div className="mt-6">
+          <ListCard
+            title="Recent Runs"
+            subtitle="Latest recorded campaign runs with full targeting descriptions visible"
+            rows={latestCampaignRuns}
+            emptyLabel="No runs yet"
+          />
         </div>
       )}
 
