@@ -5,6 +5,9 @@ import {
   Send,
   Reply,
   SlidersHorizontal,
+  Play,
+  Sparkles,
+  X,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -49,6 +52,53 @@ interface PortalStats {
     unsubscribed: number
     avg_score: number | null
     last_lead_at: string | null
+  }>
+}
+
+interface CampaignConfig {
+  product_name: string
+  product_context: string
+  target_description: string
+  num_leads_per_run: number
+  sender_name?: string | null
+  sender_email?: string | null
+  reply_to_email?: string | null
+  cal_booking_url?: string | null
+}
+
+interface CampaignAssessment {
+  summary: string
+  strengths: string[]
+  issues: string[]
+  recommendations: string[]
+  suggestedConfig: CampaignConfig
+  changeSet: Array<{
+    field: string
+    from: string | number | null
+    to: string | number | null
+    reason: string
+  }>
+}
+
+interface ProspectHistory {
+  lead: {
+    id: string
+    company: string | null
+    contact_name: string | null
+    contact_role: string | null
+    email: string | null
+    phone: string | null
+    qualify_score: number | null
+    status: string
+    created_at: string
+  }
+  timeline: Array<{
+    id: string
+    type: string
+    at: string
+    title: string
+    body: string
+    meta?: Record<string, string | number | boolean | null>
   }>
 }
 
@@ -203,8 +253,46 @@ function tabButtonClass(active: boolean) {
   }`
 }
 
+function timelineTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    outbound_email: 'Outbound Email',
+    inbound_reply: 'Inbound Reply',
+    email_event: 'Email Event',
+    follow_up_sent: 'Follow-up Sent',
+    follow_up_scheduled: 'Follow-up Scheduled',
+    support_message: 'Support Message',
+    call: 'Call Transcript',
+  }
+
+  return labels[type] || 'Activity'
+}
+
+async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${SALES_API}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+  })
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.error) message = data.error
+    } catch {
+      // Keep HTTP fallback
+    }
+    throw new Error(message)
+  }
+
+  return res.json()
+}
+
 export default function SalesDashboard() {
-  const { session } = useAuth()
+  const { session, role } = useAuth()
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
@@ -218,6 +306,19 @@ export default function SalesDashboard() {
     booked: true,
     unsubscribed: false,
   })
+  const [campaignConfig, setCampaignConfig] = useState<CampaignConfig | null>(null)
+  const [configLoading, setConfigLoading] = useState(false)
+  const [adminActionMessage, setAdminActionMessage] = useState<string | null>(null)
+  const [adminActionError, setAdminActionError] = useState<string | null>(null)
+  const [runningCampaign, setRunningCampaign] = useState(false)
+  const [reassessingCampaign, setReassessingCampaign] = useState(false)
+  const [applyingAssessment, setApplyingAssessment] = useState(false)
+  const [reassessInput, setReassessInput] = useState('')
+  const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [prospectHistory, setProspectHistory] = useState<ProspectHistory | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -250,6 +351,31 @@ export default function SalesDashboard() {
       cancelled = true
     }
   }, [session])
+
+  useEffect(() => {
+    if (!session?.access_token || role !== 'ivera_admin') {
+      setCampaignConfig(null)
+      return
+    }
+
+    let cancelled = false
+    setConfigLoading(true)
+
+    salesRequest<{ config: CampaignConfig }>(session.access_token, '/campaign/config')
+      .then((data) => {
+        if (!cancelled) setCampaignConfig(data.config)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setAdminActionError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setConfigLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [role, session])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
@@ -326,6 +452,102 @@ export default function SalesDashboard() {
     { key: 'unsubscribed', label: 'Unsubscribed' },
   ]
 
+  async function refreshStats() {
+    if (!session?.access_token) return
+    const data = await salesRequest<PortalStats>(session.access_token, '/portal/stats')
+    setStats(data)
+  }
+
+  async function handleRunCampaign() {
+    if (!session?.access_token) return
+    setRunningCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ message: string }>(session.access_token, '/campaign/start', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      })
+      setAdminActionMessage(data.message || 'Campaign started.')
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to start campaign.')
+    } finally {
+      setRunningCampaign(false)
+    }
+  }
+
+  async function handleReassessCampaign() {
+    if (!session?.access_token) return
+    setReassessingCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ assessment: CampaignAssessment }>(session.access_token, '/campaign/reassess', {
+        method: 'POST',
+        body: JSON.stringify({ admin_input: reassessInput.trim() || null }),
+      })
+      setAssessment(data.assessment)
+      setAdminActionMessage('Campaign reassessment ready.')
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to reassess campaign.')
+    } finally {
+      setReassessingCampaign(false)
+    }
+  }
+
+  async function applyAssessment(runAfterSave = false) {
+    if (!session?.access_token || !assessment) return
+    setApplyingAssessment(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ config: CampaignConfig; message: string }>(session.access_token, '/campaign/config', {
+        method: 'PATCH',
+        body: JSON.stringify(assessment.suggestedConfig),
+      })
+
+      setCampaignConfig(data.config)
+      setAdminActionMessage(runAfterSave ? 'Campaign changes saved. Starting a new run...' : (data.message || 'Campaign changes saved.'))
+
+      if (runAfterSave) {
+        await handleRunCampaign()
+      }
+
+      setAssessment(null)
+      await refreshStats()
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to apply campaign changes.')
+    } finally {
+      setApplyingAssessment(false)
+    }
+  }
+
+  async function openProspectHistory(leadId: string) {
+    if (!session?.access_token) return
+    setSelectedLeadId(leadId)
+    setHistoryLoading(true)
+    setHistoryError(null)
+    setProspectHistory(null)
+
+    try {
+      const data = await salesRequest<ProspectHistory>(session.access_token, `/leads/${leadId}/history`)
+      setProspectHistory(data)
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'Failed to load prospect history.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  function closeProspectHistory() {
+    setSelectedLeadId(null)
+    setHistoryError(null)
+    setProspectHistory(null)
+  }
+
   if (!stats && !error) {
     return (
       <div className="mx-auto flex max-w-7xl justify-center p-8 pt-24">
@@ -354,6 +576,139 @@ export default function SalesDashboard() {
         title="Sales Agent"
         subtitle="Outbound campaign performance and prospect pipeline"
       />
+
+      {role === 'ivera_admin' && (
+        <div className="mb-6 space-y-4">
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Admin Controls</p>
+                {configLoading ? (
+                  <p className="text-sm text-neutral-500">Loading current campaign config...</p>
+                ) : campaignConfig ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-neutral-900">{campaignConfig.product_name}</p>
+                    <p className="text-xs uppercase tracking-wider text-neutral-500">{campaignConfig.num_leads_per_run} leads per run</p>
+                    <p className="max-w-3xl text-sm leading-relaxed text-neutral-600">{campaignConfig.target_description}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">No live campaign config loaded.</p>
+                )}
+
+                <div className="pt-2">
+                  <label
+                    htmlFor="reassess-input"
+                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
+                  >
+                    Reassess Focus
+                  </label>
+                  <textarea
+                    id="reassess-input"
+                    value={reassessInput}
+                    onChange={(event) => setReassessInput(event.target.value)}
+                    rows={4}
+                    placeholder="Example: tighten the ICP around clinics with poor reply rates, reduce fluff in the opening email, and prioritize prospects more likely to book this month."
+                    className="w-full max-w-3xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                  />
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Optional guidance for the self-reassess routine. Leave blank for a purely data-driven review.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRunCampaign}
+                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
+                  className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Play size={12} />
+                  {runningCampaign ? 'Starting...' : 'Run Campaign'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReassessCampaign}
+                  disabled={runningCampaign || reassessingCampaign || applyingAssessment}
+                  className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Sparkles size={12} />
+                  {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
+                </button>
+              </div>
+            </div>
+
+            {adminActionMessage && (
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {adminActionMessage}
+              </div>
+            )}
+            {adminActionError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {adminActionError}
+              </div>
+            )}
+          </div>
+
+          {assessment && (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-3">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Draft</p>
+                  <p className="max-w-3xl text-sm leading-relaxed text-neutral-700">{assessment.summary}</p>
+                  {assessment.changeSet.length > 0 && (
+                    <div className="space-y-2">
+                      {assessment.changeSet.map((change) => (
+                        <div key={`${change.field}-${String(change.to)}`} className="rounded-lg border border-neutral-100 bg-white/70 px-4 py-3">
+                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{change.field.replace(/_/g, ' ')}</p>
+                          <p className="mt-1 text-sm font-medium text-neutral-900">{String(change.from ?? '—')} → {String(change.to ?? '—')}</p>
+                          <p className="mt-1 text-sm text-neutral-600">{change.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {assessment.recommendations.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {assessment.recommendations.map((recommendation) => (
+                        <span key={recommendation} className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-500">
+                          {recommendation}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyAssessment(false)}
+                    disabled={applyingAssessment}
+                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {applyingAssessment ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyAssessment(true)}
+                    disabled={applyingAssessment || runningCampaign}
+                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Save + Try Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssessment(null)}
+                    disabled={applyingAssessment}
+                    className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 transition hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <button
@@ -538,7 +893,11 @@ export default function SalesDashboard() {
                 </thead>
                 <tbody>
                   {filteredProspects.map((lead) => (
-                    <tr key={lead.id} className="border-b border-neutral-100 last:border-0">
+                    <tr
+                      key={lead.id}
+                      className="cursor-pointer border-b border-neutral-100 transition hover:bg-neutral-50/70 last:border-0"
+                      onClick={() => openProspectHistory(lead.id)}
+                    >
                       <td className="px-0 py-3 font-medium text-neutral-900">{lead.company || '—'}</td>
                       <td className="px-4 py-3 text-neutral-500">{lead.email || '—'}</td>
                       <td className="px-4 py-3">
@@ -556,6 +915,76 @@ export default function SalesDashboard() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {selectedLeadId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
+          <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Prospect History</p>
+                <h3 className="mt-1 text-lg font-semibold text-neutral-900">
+                  {prospectHistory?.lead.company || 'Loading prospect...'}
+                </h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {prospectHistory?.lead.email || '—'}
+                  {prospectHistory?.lead.phone ? ` · ${prospectHistory.lead.phone}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeProspectHistory}
+                className="rounded-full border border-neutral-200 p-2 text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-5">
+              {historyLoading ? (
+                <p className="py-16 text-center text-sm text-neutral-500">Loading full correspondence history...</p>
+              ) : historyError ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {historyError}
+                </div>
+              ) : prospectHistory?.timeline.length ? (
+                <div className="space-y-4">
+                  {prospectHistory.timeline.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-neutral-200/80 bg-neutral-50/70 p-4">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] uppercase tracking-widest text-neutral-500">
+                              {timelineTypeLabel(item.type)}
+                            </span>
+                            <span className="text-xs text-neutral-400">{timeAgo(item.at)}</span>
+                          </div>
+                          <p className="text-sm font-semibold text-neutral-900">{item.title}</p>
+                        </div>
+                      </div>
+                      {item.body && (
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{item.body}</p>
+                      )}
+                      {item.meta && Object.keys(item.meta).length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {Object.entries(item.meta)
+                            .filter(([, value]) => value !== null && value !== '')
+                            .map(([key, value]) => (
+                              <span key={key} className="rounded-full bg-white px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-500">
+                                {key.replace(/_/g, ' ')}: {String(value)}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-16 text-center text-sm text-neutral-500">No saved correspondence was found for this prospect yet.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
