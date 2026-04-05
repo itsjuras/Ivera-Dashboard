@@ -1203,13 +1203,13 @@ export default function SalesDashboard() {
                   <div className="grid gap-3 lg:grid-cols-2">
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
                       <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Targeting</p>
-                      <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
                         {assessment.suggestedConfig.target_description || 'No targeting description suggested.'}
                       </p>
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
                       <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Positioning</p>
-                      <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
                         {assessment.suggestedConfig.product_context || 'No product context suggested.'}
                       </p>
                     </div>
