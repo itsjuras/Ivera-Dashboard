@@ -713,6 +713,8 @@ export default function SalesDashboard() {
     () => (pendingRun ? buildLiveRunProgress(matchingPendingCampaign, pendingRun.startedAt, pendingRun.requestedLeadCount, runTimerNow) : null),
     [matchingPendingCampaign, pendingRun, runTimerNow],
   )
+  const hasActiveCampaign = campaigns.some((campaign) => campaign.status === 'active')
+  const runStartDisabled = runningCampaign || savingDescription || hasActiveCampaign
   const latestCampaignRuns = useMemo(
     () => {
       const rows = campaigns.slice(0, 8).map((campaign) => ({
@@ -1429,13 +1431,19 @@ export default function SalesDashboard() {
                   <button
                     type="button"
                     onClick={handleRunCampaign}
-                    disabled={runningCampaign || savingDescription}
+                    disabled={runStartDisabled}
                     className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Play size={12} />
-                    {runningCampaign ? 'Starting...' : 'Run Campaign'}
+                    {runningCampaign ? 'Starting...' : hasActiveCampaign ? 'Campaign Running' : 'Run Campaign'}
                   </button>
                 </div>
+
+                {hasActiveCampaign && !pendingRun ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    A campaign is already running. Wait for it to finish before starting another one.
+                  </div>
+                ) : null}
 
                 {pendingRun && pendingRunProgress ? (
                   <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
