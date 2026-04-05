@@ -884,11 +884,11 @@ export default function SalesDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]">
+          <div className="space-y-4">
             <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
             <ListCard
               title="Recent Runs"
-              subtitle="Latest recorded campaign runs folded into the outreach view"
+              subtitle="Latest recorded campaign runs with full targeting descriptions visible"
               rows={latestCampaignRuns}
               emptyLabel="No runs yet"
             />
