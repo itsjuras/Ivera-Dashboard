@@ -103,6 +103,16 @@ export interface ProviderSpendEntry {
   notes: string | null
 }
 
+export interface ProviderSpendSyncResult {
+  month: string
+  entries: ProviderSpendEntry[]
+  syncedProviders: string[]
+  skippedProviders: Array<{
+    providerSlug: string
+    reason: string
+  }>
+}
+
 export type Role = 'ivera_admin' | 'customer'
 
 export interface UserProduct {
@@ -267,4 +277,10 @@ export async function saveProviderSpend(
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
+}
+
+export async function syncProviderSpend(
+  month: string,
+): Promise<ProviderSpendSyncResult> {
+  return authPost('/api/spend/sync', { month })
 }

@@ -20,7 +20,7 @@ import {
 } from 'recharts'
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
-import { fetchProviderSpend, saveProviderSpend } from '../services/api'
+import { fetchProviderSpend, saveProviderSpend, syncProviderSpend } from '../services/api'
 
 const SALES_API = 'https://sales.ivera.ca'
 
@@ -343,6 +343,8 @@ const SPEND_PROVIDERS: Array<{ key: SpendProviderKey; label: string }> = [
   { key: 'other', label: 'Other' },
 ]
 
+const AUTO_SYNC_PROVIDER_KEYS = new Set<SpendProviderKey>(['openai', 'claude', 'twilio'])
+
 async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${SALES_API}${path}`, {
     ...options,
@@ -411,6 +413,7 @@ export default function SalesDashboard() {
   const [spendMonth] = useState(currentMonthKey())
   const [spendLoading, setSpendLoading] = useState(false)
   const [spendSaving, setSpendSaving] = useState(false)
+  const [spendSyncing, setSpendSyncing] = useState(false)
   const [spendStatus, setSpendStatus] = useState<string | null>(null)
   const [spendApiAvailable, setSpendApiAvailable] = useState(false)
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
@@ -808,6 +811,48 @@ export default function SalesDashboard() {
       setSpendStatus('Could not save to the shared ledger yet. Browser fallback values are still preserved here.')
     } finally {
       setSpendSaving(false)
+    }
+  }
+
+  async function handleSyncProviderSpend() {
+    setSpendSyncing(true)
+    setSpendStatus(null)
+
+    try {
+      const result = await syncProviderSpend(spendMonth)
+
+      setProviderSpend((current) => {
+        const nextState = { ...current }
+        for (const entry of result.entries) {
+          if (entry.providerSlug in nextState) {
+            nextState[entry.providerSlug as SpendProviderKey] =
+              entry.amountCad === null || entry.amountCad === undefined ? '' : String(entry.amountCad)
+          }
+        }
+        return nextState
+      })
+
+      setSpendApiAvailable(true)
+
+      const syncedLabels = result.syncedProviders
+        .map((providerSlug) => SPEND_PROVIDERS.find((provider) => provider.key === providerSlug)?.label || providerSlug)
+      const skippedLabels = result.skippedProviders
+        .map((item) => SPEND_PROVIDERS.find((provider) => provider.key === item.providerSlug)?.label || item.providerSlug)
+
+      if (syncedLabels.length > 0 && skippedLabels.length > 0) {
+        setSpendStatus(`Auto-synced ${syncedLabels.join(', ')}. Still manual: ${skippedLabels.join(', ')}.`)
+      } else if (syncedLabels.length > 0) {
+        setSpendStatus(`Auto-synced ${syncedLabels.join(', ')}.`)
+      } else if (skippedLabels.length > 0) {
+        setSpendStatus(`No provider values were auto-synced yet. Still manual: ${skippedLabels.join(', ')}.`)
+      } else {
+        setSpendStatus('No supported provider values were auto-synced yet.')
+      }
+    } catch (err) {
+      setSpendApiAvailable(false)
+      setSpendStatus(err instanceof Error ? err.message : 'Could not auto-sync provider spend yet.')
+    } finally {
+      setSpendSyncing(false)
     }
   }
 
@@ -1261,7 +1306,7 @@ export default function SalesDashboard() {
               <div className="max-w-xl space-y-2">
                 <p className="text-[11px] tracking-widest uppercase text-neutral-400">Spend Tracker</p>
                 <p className="text-sm text-neutral-700">
-                  Track monthly actual spend for each provider in one place. We now try to save these values into a shared admin ledger first, with a browser fallback if the table is not ready yet.
+                  Track monthly actual spend for each provider in one place. We now auto-sync supported providers first, then let you keep the rest manual in the shared admin ledger.
                 </p>
                 <div className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-neutral-500">
                   {spendMonth}
@@ -1299,7 +1344,14 @@ export default function SalesDashboard() {
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {SPEND_PROVIDERS.map((provider) => (
                     <label key={provider.key} className="space-y-2">
-                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">{provider.label}</span>
+                      <span className="flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
+                        <span>{provider.label}</span>
+                        {AUTO_SYNC_PROVIDER_KEYS.has(provider.key) ? (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold tracking-[0.18em] text-emerald-700">
+                            Auto
+                          </span>
+                        ) : null}
+                      </span>
                       <div className="relative">
                         <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">$</span>
                         <input
@@ -1323,7 +1375,7 @@ export default function SalesDashboard() {
                 <div className="rounded-xl border border-neutral-900 bg-neutral-900 px-4 py-4 text-white">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
                   <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-neutral-400">Manual actuals for the suppliers this stack currently uses: Twilio, AWS, OpenAI, Claude, DigitalOcean, SendGrid, Exa, Supabase, Vercel, Stripe, Deepgram, Cal.com, and any other related vendor costs.</p>
+                  <p className="mt-1 text-xs text-neutral-400">Auto-sync is live for OpenAI, Claude, and Twilio. The rest stay editable here until we wire their billing APIs too.</p>
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
@@ -1334,14 +1386,24 @@ export default function SalesDashboard() {
                         ? 'Saving updates writes to the shared admin ledger.'
                         : 'Saving updates will stay in browser fallback mode until the shared ledger table is created.'}
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleSaveProviderSpend}
-                    disabled={spendSaving || spendLoading}
-                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {spendSaving ? 'Saving...' : 'Save Spendings'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSyncProviderSpend}
+                      disabled={spendSyncing || spendSaving || spendLoading}
+                      className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {spendSyncing ? 'Syncing...' : 'Auto Sync Supported'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveProviderSpend}
+                      disabled={spendSaving || spendSyncing || spendLoading}
+                      className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {spendSaving ? 'Saving...' : 'Save Spendings'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

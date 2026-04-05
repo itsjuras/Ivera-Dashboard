@@ -1,6 +1,7 @@
 import type { Response } from 'express'
 import type { AuthRequest } from '../middleware/requireAuth'
 import { listProviderSpend, upsertProviderSpend } from '../models/spendModel'
+import { syncProviderSpend } from '../lib/providerSpendSync'
 
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7)
@@ -54,6 +55,18 @@ export async function saveProviderSpend(req: AuthRequest, res: Response): Promis
   } catch (err: unknown) {
     console.error('saveProviderSpend failed:', err)
     const message = err instanceof Error ? err.message : 'Failed to save provider spend'
+    res.status(500).json({ error: message })
+  }
+}
+
+export async function syncProviderSpendController(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const month = typeof req.body?.month === 'string' ? req.body.month : currentMonth()
+    const result = await syncProviderSpend(month, req.userId)
+    res.json(result)
+  } catch (err: unknown) {
+    console.error('syncProviderSpend failed:', err)
+    const message = err instanceof Error ? err.message : 'Failed to sync provider spend'
     res.status(500).json({ error: message })
   }
 }
