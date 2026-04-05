@@ -12,31 +12,52 @@ export interface Payment {
 
 export async function getAllPayments(): Promise<Payment[]> {
   const { data, error } = await supabase
-    .from('payments')
-    .select(`
-      id,
-      amount,
-      status,
-      created_at,
-      clients ( first_name, last_name )
-    `)
+    .from('bookings')
+    .select('id, client_id, amount, payment_status, created_at')
     .order('created_at', { ascending: false })
     .limit(50)
 
   if (error) throw error
+  const clientIds = [...new Set((data ?? []).map((row) => row.client_id).filter(Boolean))]
 
-  return (data ?? []).map(mapPayment)
-}
+  let contactsById = new Map<string, { first_name?: string | null; last_name?: string | null }>()
+  if (clientIds.length > 0) {
+    const { data: contacts, error: contactsError } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name')
+      .in('id', clientIds)
 
-function mapPayment(row: Record<string, unknown>): Payment {
-  const client = row.clients as Record<string, string> | null
-  return {
-    id: row.id as string,
-    clientName: client ? `${client.first_name ?? ''} ${client.last_name ?? ''}`.trim() : 'Unknown',
-    amount: parseFloat(row.amount as string) || 0,
-    status: (row.status as string) || 'pending',
-    createdAt: row.created_at as string,
-    cardBrand: '',
-    cardLast4: '',
+    if (contactsError) throw contactsError
+
+    contactsById = new Map(
+      (contacts ?? []).map((contact) => [
+        contact.id as string,
+        {
+          first_name: (contact.first_name as string | null) ?? null,
+          last_name: (contact.last_name as string | null) ?? null,
+        },
+      ]),
+    )
   }
+
+  return (data ?? []).map((row) => {
+    const client = contactsById.get(row.client_id as string)
+    const rawStatus = String(row.payment_status ?? 'pending').toLowerCase()
+    const status =
+      rawStatus === 'charged' || rawStatus === 'paid_cash'
+        ? 'succeeded'
+        : rawStatus === 'failed'
+          ? 'failed'
+          : 'pending'
+
+    return {
+      id: row.id as string,
+      clientName: client ? `${client.first_name ?? ''} ${client.last_name ?? ''}`.trim() : 'Unknown',
+      amount: parseFloat(String(row.amount ?? 0)) || 0,
+      status,
+      createdAt: row.created_at as string,
+      cardBrand: '',
+      cardLast4: '',
+    }
+  })
 }

@@ -12,8 +12,8 @@ export interface Client {
 
 export async function getAllClients(): Promise<Client[]> {
   const { data, error } = await supabase
-    .from('clients')
-    .select('id, first_name, last_name, email, phone, status, created_at')
+    .from('contacts')
+    .select('id, first_name, last_name, email, phone, created_at')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -29,7 +29,7 @@ function mapClient(row: Record<string, unknown>): Client {
     lastName: (row.last_name as string) || '',
     email: (row.email as string) || '',
     phone: (row.phone as string) || '',
-    status: (row.status as string) || 'BOOKED',
+    status: 'ACTIVE',
     createdAt: row.created_at as string,
   }
 }

@@ -15,33 +15,31 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
 
   const [
-    activeClientsRes,
-    leadsRes,
+    contactsRes,
+    bookedContactsRes,
     revenueRes,
-    usageRes,
+    remindersRes,
     totalBookingsRes,
     upcomingBookingsRes,
   ] = await Promise.all([
     supabase
-      .from('clients')
+      .from('contacts')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'ACTIVE'),
+      ,
 
     supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .not('activated_at', 'is', null)
-      .gte('activated_at', monthStart),
-
-    supabase
-      .from('payments')
-      .select('amount')
-      .eq('status', 'succeeded')
+      .from('bookings')
+      .select('client_id')
       .gte('created_at', monthStart),
 
     supabase
-      .from('usage')
-      .select('calls_count, sms_used'),
+      .from('bookings')
+      .select('amount, payment_status')
+      .gte('created_at', monthStart),
+
+    supabase
+      .from('reminders')
+      .select('reminder_24h_sent_at, reminder_2h_sent_at, trainer_notified_at, followup_sent_at'),
 
     supabase
       .from('bookings')
@@ -55,19 +53,34 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   ])
 
   const totalRevenue = (revenueRes.data ?? []).reduce(
-    (sum, row) => sum + (parseFloat(row.amount) || 0),
+    (sum, row) => {
+      const paymentStatus = String(row.payment_status ?? '').toLowerCase()
+      if (paymentStatus !== 'charged' && paymentStatus !== 'paid_cash') return sum
+      return sum + (parseFloat(String(row.amount ?? 0)) || 0)
+    },
     0
   )
 
-  const usageData = usageRes.data ?? []
-  const callsHandled = usageData.reduce((sum, row) => sum + (Number(row.calls_count) || 0), 0)
-  const smsSent = usageData.reduce((sum, row) => sum + (Number(row.sms_used) || 0), 0)
+  const bookedClientIds = new Set(
+    (bookedContactsRes.data ?? [])
+      .map((row) => row.client_id as string | null)
+      .filter((value): value is string => Boolean(value)),
+  )
+
+  const reminders = remindersRes.data ?? []
+  const smsSent = reminders.reduce((sum, row) => (
+    sum
+      + (row.reminder_24h_sent_at ? 1 : 0)
+      + (row.reminder_2h_sent_at ? 1 : 0)
+      + (row.followup_sent_at ? 1 : 0)
+      + (row.trainer_notified_at ? 1 : 0)
+  ), 0)
 
   return {
-    activeClients: activeClientsRes.count ?? 0,
-    leadsConverted: leadsRes.count ?? 0,
+    activeClients: contactsRes.count ?? 0,
+    leadsConverted: bookedClientIds.size,
     totalRevenue,
-    callsHandled,
+    callsHandled: totalBookingsRes.count ?? 0,
     totalBookings: totalBookingsRes.count ?? 0,
     upcomingBookings: upcomingBookingsRes.count ?? 0,
     smsSent,
