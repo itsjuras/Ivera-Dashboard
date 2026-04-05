@@ -44,6 +44,7 @@ interface PortalStats {
     product_name: string
     target_description: string
     created_at: string
+    status?: string
     funnel_diagnostics?: {
       requested_leads?: number
       effective_run_limit?: number
@@ -259,6 +260,74 @@ function buildFunnelSummary(
     .map(([label, value]) => `${label} ${value}`)
 
   return parts.length ? parts.join(' → ') : null
+}
+
+function buildLiveRunProgress(
+  run: PortalStats['campaigns'][number] | null,
+  startedAt: number,
+  requestedLeadCount: number | null,
+  now = Date.now(),
+) {
+  const diagnostics = run?.funnel_diagnostics
+  const rawCandidates = diagnostics?.raw_candidates ?? 0
+  const freshCandidates = diagnostics?.fresh_candidates ?? run?.total_leads ?? 0
+  const qualified = diagnostics?.qualified ?? run?.qualified_leads ?? 0
+  const emailFound = diagnostics?.email_found ?? 0
+  const noEmail = diagnostics?.no_email_found ?? 0
+  const sent = diagnostics?.sent ?? run?.emailed ?? 0
+  const isComplete = run?.status === 'complete'
+
+  const hasSearch = rawCandidates > 0 || freshCandidates > 0
+  const hasQualified = qualified > 0 || sent > 0
+  const hasContacts = emailFound > 0 || noEmail > 0 || sent > 0
+  const hasSent = sent > 0
+
+  const stages = [
+    { key: 'search', label: 'Searching', done: hasSearch },
+    { key: 'qualify', label: 'Qualifying', done: hasQualified },
+    { key: 'contacts', label: 'Finding Contacts', done: hasContacts },
+    { key: 'sending', label: 'Sending', done: hasSent },
+    { key: 'complete', label: 'Completed', done: isComplete },
+  ]
+
+  const currentIndex = isComplete ? stages.length - 1 : stages.findIndex((stage) => !stage.done)
+  const completedCount = stages.filter((stage) => stage.done).length
+  const progressPercent = isComplete
+    ? 100
+    : Math.max(10, Math.round(((completedCount + (currentIndex >= 0 ? 0.45 : 0)) / stages.length) * 100))
+
+  const steps = stages.map((stage, index) => ({
+    ...stage,
+    state: stage.done ? 'complete' : index === currentIndex ? 'current' : 'upcoming',
+  }))
+
+  let summary = `Campaign queued · ${formatElapsedTimer(startedAt, now)} elapsed`
+  if (run && !hasQualified) {
+    summary = `Searching and cleaning candidates · ${rawCandidates || '—'} raw found so far`
+  } else if (run && hasQualified && !hasContacts) {
+    summary = `Qualifying best-fit accounts · ${qualified} leads passed scoring`
+  } else if (run && hasContacts && !hasSent) {
+    summary = `Finding real contacts · ${emailFound} found, ${noEmail} skipped`
+  } else if (run && hasSent && !isComplete) {
+    summary = `Sending outreach · ${sent} sent so far`
+  } else if (run && isComplete) {
+    summary = `Run complete · ${sent} sent, ${qualified} qualified, ${freshCandidates} fresh candidates reviewed`
+  }
+
+  return {
+    isComplete,
+    summary,
+    progressPercent,
+    steps,
+    badge: isComplete ? 'completed' : `${formatElapsedTimer(startedAt, now)}`,
+    metrics: [
+      { label: 'Requested', value: requestedLeadCount ?? run?.funnel_diagnostics?.requested_leads ?? '—' },
+      { label: 'Raw', value: rawCandidates ?? '—' },
+      { label: 'Fresh', value: freshCandidates ?? '—' },
+      { label: 'Qualified', value: qualified ?? '—' },
+      { label: 'Sent', value: sent ?? '—' },
+    ],
+  }
 }
 
 function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
@@ -490,6 +559,8 @@ export default function SalesDashboard() {
     startedAt: number
     title: string
     requestedLeadCount: number | null
+    campaignId: string | null
+    completedAt: number | null
   } | null>(null)
   const [runTimerNow, setRunTimerNow] = useState(Date.now())
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -627,6 +698,21 @@ export default function SalesDashboard() {
     Number.isFinite(parsedExpectedMax) &&
     (parsedManualOverride < parsedExpectedMin || parsedManualOverride > parsedExpectedMax)
 
+  const matchingPendingCampaign = useMemo(() => {
+    if (!pendingRun) return null
+    if (pendingRun.campaignId) {
+      return campaigns.find((campaign) => campaign.id === pendingRun.campaignId) ?? null
+    }
+    return (
+      campaigns.find(
+        (campaign) => new Date(campaign.created_at).getTime() >= pendingRun.startedAt - 60_000,
+      ) ?? null
+    )
+  }, [campaigns, pendingRun])
+  const pendingRunProgress = useMemo(
+    () => (pendingRun ? buildLiveRunProgress(matchingPendingCampaign, pendingRun.startedAt, pendingRun.requestedLeadCount, runTimerNow) : null),
+    [matchingPendingCampaign, pendingRun, runTimerNow],
+  )
   const latestCampaignRuns = useMemo(
     () => {
       const rows = campaigns.slice(0, 8).map((campaign) => ({
@@ -649,23 +735,22 @@ export default function SalesDashboard() {
         ],
       }))
 
-      if (!pendingRun) return rows
+      if (!pendingRun || !pendingRunProgress) return rows
 
       return [
         {
           id: 'pending-run',
           title: pendingRun.title,
-          meta: `Live run in progress · ${formatElapsedTimer(pendingRun.startedAt, runTimerNow)}`,
-          badge:
-            pendingRun.requestedLeadCount && pendingRun.requestedLeadCount > 0
-              ? `${pendingRun.requestedLeadCount} requested`
-              : 'running',
+          meta: pendingRunProgress.summary,
+          badge: pendingRunProgress.badge,
+          detail: buildFunnelSummary(matchingPendingCampaign?.funnel_diagnostics) || undefined,
+          metrics: pendingRunProgress.metrics,
           interactive: false,
         },
         ...rows,
       ]
     },
-    [campaigns, pendingRun, runTimerNow],
+    [campaigns, matchingPendingCampaign, pendingRun, pendingRunProgress],
   )
 
   const selectedRun = useMemo(
@@ -739,26 +824,32 @@ export default function SalesDashboard() {
   useEffect(() => {
     if (!pendingRun) return
 
-    const startedAt = pendingRun.startedAt
-    const matchingRun = campaigns.find(
-      (campaign) => new Date(campaign.created_at).getTime() >= startedAt - 60_000,
-    )
+    if (matchingPendingCampaign && pendingRun.campaignId !== matchingPendingCampaign.id) {
+      setPendingRun((current) => (
+        current ? { ...current, campaignId: matchingPendingCampaign.id } : current
+      ))
+      return
+    }
 
-    if (!matchingRun) return
+    if (matchingPendingCampaign?.status === 'complete') {
+      if (!pendingRun.completedAt) {
+        setPendingRun((current) => (
+          current ? { ...current, completedAt: Date.now() } : current
+        ))
+        return
+      }
 
-    const hasMeaningfulProgress =
-      (matchingRun.total_leads ?? 0) > 0 ||
-      (matchingRun.emailed ?? 0) > 0 ||
-      (matchingRun.replied ?? 0) > 0 ||
-      (matchingRun.booked ?? 0) > 0 ||
-      (matchingRun.unsubscribed ?? 0) > 0
+      if (Date.now() - pendingRun.completedAt > 120_000) {
+        setPendingRun(null)
+      }
+      return
+    }
 
-    const hasTimedOut = Date.now() - startedAt > 3 * 60_000
-
-    if (hasMeaningfulProgress || hasTimedOut) {
+    const hasTimedOut = Date.now() - pendingRun.startedAt > 20 * 60_000
+    if (hasTimedOut) {
       setPendingRun(null)
     }
-  }, [campaigns, pendingRun])
+  }, [matchingPendingCampaign, pendingRun])
 
   const outreachMetrics = [
     { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
@@ -816,6 +907,8 @@ export default function SalesDashboard() {
         startedAt,
         title: campaignConfig?.product_name || 'Campaign run',
         requestedLeadCount: requestedLeadCount ?? null,
+        campaignId: null,
+        completedAt: null,
       })
       setRunTimerNow(startedAt)
       setAdminActionMessage(
@@ -1343,6 +1436,71 @@ export default function SalesDashboard() {
                     {runningCampaign ? 'Starting...' : 'Run Campaign'}
                   </button>
                 </div>
+
+                {pendingRun && pendingRunProgress ? (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">
+                          {pendingRunProgress.isComplete ? 'Run Complete' : 'Campaign In Progress'}
+                        </p>
+                        <h4 className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun.title}</h4>
+                        <p className="mt-1 text-xs text-neutral-500">{pendingRunProgress.summary}</p>
+                      </div>
+                      <span className={`inline-flex self-start rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${
+                        pendingRunProgress.isComplete
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-neutral-200 bg-white text-neutral-500'
+                      }`}>
+                        {pendingRunProgress.badge}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-200">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          pendingRunProgress.isComplete ? 'bg-emerald-500' : 'bg-neutral-900'
+                        }`}
+                        style={{ width: `${pendingRunProgress.progressPercent}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
+                      {pendingRunProgress.steps.map((step) => (
+                        <div
+                          key={step.key}
+                          className={`rounded-lg border px-3 py-3 ${
+                            step.state === 'complete'
+                              ? 'border-emerald-200 bg-emerald-50/80'
+                              : step.state === 'current'
+                                ? 'border-neutral-900 bg-white'
+                                : 'border-neutral-100 bg-white/70'
+                          }`}
+                        >
+                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{step.label}</p>
+                          <p className={`mt-1 text-sm font-semibold ${
+                            step.state === 'complete'
+                              ? 'text-emerald-700'
+                              : step.state === 'current'
+                                ? 'text-neutral-900'
+                                : 'text-neutral-400'
+                          }`}>
+                            {step.state === 'complete' ? 'Done' : step.state === 'current' ? 'In progress' : 'Waiting'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
+                      {pendingRunProgress.metrics.map((metric) => (
+                        <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-2.5">
+                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{metric.label}</p>
+                          <p className="mt-1 text-lg font-semibold text-neutral-900">{metric.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
