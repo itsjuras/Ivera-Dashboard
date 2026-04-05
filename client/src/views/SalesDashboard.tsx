@@ -6,9 +6,9 @@ import {
   CalendarCheck,
   Send,
   Reply,
+  UserMinus,
 } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
-import StatCard from '../components/StatCard'
 import { useAuth } from '../hooks/useAuth'
 
 const SALES_API = 'https://sales.ivera.ca'
@@ -60,6 +60,66 @@ function timeAgo(iso: string) {
 function replyRate(replied: number, emailed: number) {
   if (!emailed) return '—'
   return `${((replied / emailed) * 100).toFixed(1)}%`
+}
+
+function bookingRate(booked: number, emailed: number) {
+  if (!emailed) return '—'
+  return `${((booked / emailed) * 100).toFixed(1)}%`
+}
+
+function unsubscribeRate(unsubscribed: number, emailed: number) {
+  if (!emailed) return '—'
+  return `${((unsubscribed / emailed) * 100).toFixed(1)}%`
+}
+
+function averageLeadScore(leads: PortalStats['recentLeads']) {
+  const scored = leads.filter((lead) => typeof lead.qualify_score === 'number')
+  if (scored.length === 0) return '—'
+  const total = scored.reduce((sum, lead) => sum + (lead.qualify_score ?? 0), 0)
+  return `${(total / scored.length).toFixed(1)}/10`
+}
+
+function highIntentCount(leads: PortalStats['recentLeads']) {
+  return leads.filter((lead) => (lead.qualify_score ?? 0) >= 7).length
+}
+
+function recentReplyCount(leads: PortalStats['recentLeads']) {
+  return leads.filter((lead) => lead.status === 'replied' || lead.status === 'booked').length
+}
+
+function latestRunLabel(campaigns: PortalStats['campaigns']) {
+  if (campaigns.length === 0) return 'No runs yet'
+  return `Latest ${timeAgo(campaigns[0].created_at)}`
+}
+
+function MetricGroup({
+  title,
+  icon: Icon,
+  metrics,
+}: {
+  title: string
+  icon: typeof Mail
+  metrics: Array<{ label: string; value: string | number; hint: string }>
+}) {
+  return (
+    <div className="bg-white/70 rounded-xl border border-neutral-200/60 p-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-lg bg-neutral-100 p-2">
+          <Icon size={16} className="text-neutral-600" />
+        </div>
+        <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/60 p-4">
+            <p className="text-[11px] tracking-widest uppercase text-neutral-400">{metric.label}</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-900">{metric.value}</p>
+            <p className="mt-1 text-xs text-neutral-500">{metric.hint}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function SalesDashboard() {
@@ -124,7 +184,30 @@ export default function SalesDashboard() {
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const campaigns = stats?.campaigns ?? []
-  const latestCampaignRun = campaigns[0] ?? null
+  const outreachMetrics = [
+    { label: 'Emails Sent', value: totals.emailed, hint: 'All time' },
+    { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Last 7 days' },
+    { label: 'Campaign Runs', value: campaigns.length, hint: 'Recorded runs' },
+    { label: 'Latest Run', value: latestRunLabel(campaigns), hint: 'Most recent activity' },
+  ]
+  const engagementMetrics = [
+    { label: 'Replies', value: totals.replied, hint: 'All time' },
+    { label: 'Reply Rate', value: replyRate(totals.replied, totals.emailed), hint: 'Replies divided by emails' },
+    { label: 'Unsubscribed', value: totals.unsubscribed, hint: 'All time' },
+    { label: 'Unsub Rate', value: unsubscribeRate(totals.unsubscribed, totals.emailed), hint: 'Unsubscribed divided by emails' },
+  ]
+  const pipelineMetrics = [
+    { label: 'Meetings Booked', value: totals.booked, hint: 'All time' },
+    { label: 'Booked Rate', value: bookingRate(totals.booked, totals.emailed), hint: 'Booked divided by emails' },
+    { label: 'Pipeline Leads', value: recentLeads.length, hint: 'Recent prospects shown below' },
+    { label: 'Recent Replies', value: recentReplyCount(recentLeads), hint: 'Replies or bookings in recent leads' },
+  ]
+  const qualityMetrics = [
+    { label: 'Avg Lead Score', value: averageLeadScore(recentLeads), hint: 'Across scored recent leads' },
+    { label: 'High-Intent', value: highIntentCount(recentLeads), hint: 'Score 7/10 or higher' },
+    { label: 'Booked', value: recentLeads.filter((lead) => lead.status === 'booked').length, hint: 'Within recent leads' },
+    { label: 'Unsubscribed', value: recentLeads.filter((lead) => lead.status === 'unsubscribed').length, hint: 'Within recent leads' },
+  ]
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -133,18 +216,11 @@ export default function SalesDashboard() {
         subtitle="Outbound campaign performance and prospect pipeline"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Emails Sent" value={totals.emailed} subtitle="All time" icon={Send} />
-        <StatCard label="Reply Rate" value={replyRate(totals.replied, totals.emailed)} subtitle={`${totals.replied} replies`} icon={Reply} />
-        <StatCard label="Meetings Booked" value={totals.booked} subtitle="All time" icon={CalendarCheck} />
-        <StatCard label="Sent This Week" value={totals.weekEmailed} subtitle="Last 7 days" icon={MousePointerClick} />
-        <StatCard label="Prospects in Pipeline" value={recentLeads.length} subtitle="Recent leads" icon={Users} />
-        <StatCard
-          label="Campaign Runs"
-          value={campaigns.length}
-          subtitle={latestCampaignRun ? `Latest ${timeAgo(latestCampaignRun.created_at)}` : 'No runs yet'}
-          icon={Mail}
-        />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+        <MetricGroup title="Outreach" icon={Send} metrics={outreachMetrics} />
+        <MetricGroup title="Engagement" icon={Reply} metrics={engagementMetrics} />
+        <MetricGroup title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
+        <MetricGroup title="Lead Quality" icon={Users} metrics={qualityMetrics} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
