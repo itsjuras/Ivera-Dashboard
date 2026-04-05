@@ -97,6 +97,12 @@ export interface Payment {
   cardLast4: string
 }
 
+export interface ProviderSpendEntry {
+  providerSlug: string
+  amountCad: number | null
+  notes: string | null
+}
+
 export type Role = 'ivera_admin' | 'customer'
 
 export interface UserProduct {
@@ -238,4 +244,27 @@ export function upsertCustomerProfile(
   profile: Partial<CustomerProfile>,
 ): Promise<{ success: boolean }> {
   return authPatch(`/api/user/customers/${userId}/profile`, profile)
+}
+
+export function fetchProviderSpend(
+  month: string,
+): Promise<{ month: string; entries: ProviderSpendEntry[] }> {
+  return authGet(`/api/spend?month=${encodeURIComponent(month)}`)
+}
+
+export async function saveProviderSpend(
+  month: string,
+  entries: ProviderSpendEntry[],
+): Promise<{ month: string; entries: ProviderSpendEntry[] }> {
+  const token = await getToken()
+  const res = await fetch(`${API_BASE}/api/spend`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ month, entries }),
+  })
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  return res.json()
 }

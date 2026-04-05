@@ -20,6 +20,7 @@ import {
 } from 'recharts'
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
+import { fetchProviderSpend, saveProviderSpend } from '../services/api'
 
 const SALES_API = 'https://sales.ivera.ca'
 
@@ -135,6 +136,10 @@ type SpendProviderKey =
   | 'deepgram'
   | 'cal'
   | 'other'
+
+function currentMonthKey() {
+  return new Date().toISOString().slice(0, 7)
+}
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -403,6 +408,11 @@ export default function SalesDashboard() {
     cal: '',
     other: '',
   })
+  const [spendMonth] = useState(currentMonthKey())
+  const [spendLoading, setSpendLoading] = useState(false)
+  const [spendSaving, setSpendSaving] = useState(false)
+  const [spendStatus, setSpendStatus] = useState<string | null>(null)
+  const [spendApiAvailable, setSpendApiAvailable] = useState(false)
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -478,7 +488,7 @@ export default function SalesDashboard() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const storageKey = `ivera-sales-admin-spend:${campaignConfig?.product_name || 'default'}`
+    const storageKey = `ivera-sales-admin-spend:${spendMonth}`
     try {
       const raw = window.localStorage.getItem(storageKey)
       if (!raw) return
@@ -487,13 +497,49 @@ export default function SalesDashboard() {
     } catch {
       // Ignore malformed local cache
     }
-  }, [campaignConfig?.product_name])
+  }, [spendMonth])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const storageKey = `ivera-sales-admin-spend:${campaignConfig?.product_name || 'default'}`
+    const storageKey = `ivera-sales-admin-spend:${spendMonth}`
     window.localStorage.setItem(storageKey, JSON.stringify(providerSpend))
-  }, [campaignConfig?.product_name, providerSpend])
+  }, [providerSpend, spendMonth])
+
+  useEffect(() => {
+    if (role !== 'ivera_admin') return
+
+    let cancelled = false
+    setSpendLoading(true)
+
+    fetchProviderSpend(spendMonth)
+      .then((data) => {
+        if (cancelled) return
+        setProviderSpend((current) => {
+          const nextState = { ...current }
+          for (const entry of data.entries) {
+            if (entry.providerSlug in nextState) {
+              nextState[entry.providerSlug as SpendProviderKey] =
+                entry.amountCad === null || entry.amountCad === undefined ? '' : String(entry.amountCad)
+            }
+          }
+          return nextState
+        })
+        setSpendApiAvailable(true)
+        setSpendStatus('Shared spend tracker connected.')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSpendApiAvailable(false)
+        setSpendStatus('Using browser fallback until the shared spend table is ready.')
+      })
+      .finally(() => {
+        if (!cancelled) setSpendLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [role, spendMonth])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
@@ -738,6 +784,31 @@ export default function SalesDashboard() {
     setSelectedLeadId(null)
     setHistoryError(null)
     setProspectHistory(null)
+  }
+
+  async function handleSaveProviderSpend() {
+    setSpendSaving(true)
+    setSpendStatus(null)
+
+    try {
+      const payload = SPEND_PROVIDERS.map((provider) => ({
+        providerSlug: provider.key,
+        amountCad:
+          providerSpend[provider.key].trim() === ''
+            ? null
+            : Number(providerSpend[provider.key]),
+        notes: null,
+      }))
+
+      await saveProviderSpend(spendMonth, payload)
+      setSpendApiAvailable(true)
+      setSpendStatus('Shared spend tracker saved.')
+    } catch {
+      setSpendApiAvailable(false)
+      setSpendStatus('Could not save to the shared ledger yet. Browser fallback values are still preserved here.')
+    } finally {
+      setSpendSaving(false)
+    }
   }
 
   if (!stats && !error) {
@@ -1190,8 +1261,11 @@ export default function SalesDashboard() {
               <div className="max-w-xl space-y-2">
                 <p className="text-[11px] tracking-widest uppercase text-neutral-400">Spend Tracker</p>
                 <p className="text-sm text-neutral-700">
-                  Track monthly actual spend for each provider in one place. These values are manual and stored in this browser for now.
+                  Track monthly actual spend for each provider in one place. We now try to save these values into a shared admin ledger first, with a browser fallback if the table is not ready yet.
                 </p>
+                <div className="inline-flex rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-neutral-500">
+                  {spendMonth}
+                </div>
                 <div className="grid grid-cols-2 gap-2 pt-2 md:grid-cols-4">
                   <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Emails Sent</p>
@@ -1210,6 +1284,15 @@ export default function SalesDashboard() {
                     <p className="mt-1 text-lg font-semibold text-neutral-900">{totals.booked}</p>
                   </div>
                 </div>
+                {spendStatus && (
+                  <div className={`rounded-lg px-4 py-3 text-sm ${
+                    spendApiAvailable
+                      ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border border-amber-200 bg-amber-50 text-amber-700'
+                  }`}>
+                    {spendStatus}
+                  </div>
+                )}
               </div>
 
               <div className="w-full max-w-3xl space-y-4">
@@ -1241,6 +1324,24 @@ export default function SalesDashboard() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
                   <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
                   <p className="mt-1 text-xs text-neutral-400">Manual actuals for the suppliers this stack currently uses: Twilio, AWS, OpenAI, Claude, DigitalOcean, SendGrid, Exa, Supabase, Vercel, Stripe, Deepgram, Cal.com, and any other related vendor costs.</p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-neutral-500">
+                    {spendLoading
+                      ? 'Checking shared spend ledger...'
+                      : spendApiAvailable
+                        ? 'Saving updates writes to the shared admin ledger.'
+                        : 'Saving updates will stay in browser fallback mode until the shared ledger table is created.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSaveProviderSpend}
+                    disabled={spendSaving || spendLoading}
+                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {spendSaving ? 'Saving...' : 'Save Spendings'}
+                  </button>
                 </div>
               </div>
             </div>

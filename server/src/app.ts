@@ -7,6 +7,7 @@ import clientRoutes from './routes/clients'
 import paymentRoutes from './routes/payments'
 import authRoutes from './routes/auth'
 import userRoutes from './routes/user'
+import spendRoutes from './routes/spend'
 
 dotenv.config()
 
@@ -43,6 +44,7 @@ app.use('/api/clients', clientRoutes)
 app.use('/api/payments', paymentRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/user', userRoutes)
+app.use('/api/spend', spendRoutes)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
