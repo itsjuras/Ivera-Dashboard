@@ -2,12 +2,19 @@ import { useState, useEffect } from 'react'
 import {
   Mail,
   Users,
-  MousePointerClick,
   CalendarCheck,
   Send,
   Reply,
-  UserMinus,
 } from 'lucide-react'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts'
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
 
@@ -90,6 +97,39 @@ function recentReplyCount(leads: PortalStats['recentLeads']) {
 function latestRunLabel(campaigns: PortalStats['campaigns']) {
   if (campaigns.length === 0) return 'No runs yet'
   return `Latest ${timeAgo(campaigns[0].created_at)}`
+}
+
+function buildLeadActivity(leads: PortalStats['recentLeads']) {
+  const byDay = new Map<string, { day: string; sent: number; replied: number; booked: number }>()
+
+  for (let offset = 13; offset >= 0; offset -= 1) {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    date.setDate(date.getDate() - offset)
+    const key = date.toISOString().slice(0, 10)
+    byDay.set(key, {
+      day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      sent: 0,
+      replied: 0,
+      booked: 0,
+    })
+  }
+
+  for (const lead of leads) {
+    const key = new Date(lead.created_at).toISOString().slice(0, 10)
+    const bucket = byDay.get(key)
+    if (!bucket) continue
+
+    if (lead.status === 'replied') {
+      bucket.replied += 1
+    } else if (lead.status === 'booked') {
+      bucket.booked += 1
+    } else {
+      bucket.sent += 1
+    }
+  }
+
+  return Array.from(byDay.values())
 }
 
 function MetricGroup({
@@ -184,6 +224,7 @@ export default function SalesDashboard() {
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const campaigns = stats?.campaigns ?? []
+  const leadActivity = buildLeadActivity(recentLeads)
   const outreachMetrics = [
     { label: 'Emails Sent', value: totals.emailed, hint: 'All time' },
     { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Last 7 days' },
@@ -221,6 +262,44 @@ export default function SalesDashboard() {
         <MetricGroup title="Engagement" icon={Reply} metrics={engagementMetrics} />
         <MetricGroup title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
         <MetricGroup title="Lead Quality" icon={Users} metrics={qualityMetrics} />
+      </div>
+
+      <div className="bg-white/70 rounded-xl border border-neutral-200/60 p-6 mb-6">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">Recent Lead Activity</h3>
+            <p className="mt-1 text-xs text-neutral-500">Last 14 days from live lead records</p>
+          </div>
+        </div>
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={leadActivity} barGap={6}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+              <XAxis
+                dataKey="day"
+                tick={{ fontSize: 12, fill: '#a3a3a3' }}
+                axisLine={{ stroke: '#e5e5e5' }}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 12, fill: '#a3a3a3' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e5e5e5',
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              />
+              <Bar dataKey="sent" stackId="activity" fill="#d4d4d4" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="replied" stackId="activity" fill="#93c5fd" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="booked" stackId="activity" fill="#171717" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
