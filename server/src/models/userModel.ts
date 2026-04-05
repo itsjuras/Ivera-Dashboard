@@ -216,7 +216,7 @@ export async function listCustomers(): Promise<CustomerSummary[]> {
 
   if (error) throw error
 
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     (roles ?? []).map(async (row) => {
       const { data: authData } = await supabase.auth.admin.getUserById(row.user_id as string)
       const products = await getUserProducts(row.user_id as string)
@@ -232,7 +232,11 @@ export async function listCustomers(): Promise<CustomerSummary[]> {
     }),
   )
 
-  return results
+  return results.flatMap((result) => {
+    if (result.status === 'fulfilled') return [result.value]
+    console.error('Skipping customer row during admin load:', result.reason)
+    return []
+  })
 }
 
 export async function getCustomerProfile(userId: string): Promise<CustomerProfile> {

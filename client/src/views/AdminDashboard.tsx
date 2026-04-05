@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Phone, Building2, Hash, Calendar, Mail, UserPlus } from 'lucide-react'
+import SpendTrackerPanel from '../components/admin/SpendTrackerPanel'
 import {
   fetchCustomers,
   fetchPlans,
@@ -149,13 +150,21 @@ export default function AdminDashboard() {
   const newCustomerEmailRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    Promise.all([fetchCustomers(), fetchPlans()])
-      .then(([c, p]) => {
-        setCustomers(c)
-        setPlans(p)
-        if (c.length > 0) setSelectedId(c[0].userId)
+    Promise.allSettled([fetchCustomers(), fetchPlans()])
+      .then(([customersResult, plansResult]) => {
+        if (customersResult.status === 'fulfilled') {
+          setCustomers(customersResult.value)
+          if (customersResult.value.length > 0) setSelectedId(customersResult.value[0].userId)
+        } else {
+          setError('Failed to load customers')
+        }
+
+        if (plansResult.status === 'fulfilled') {
+          setPlans(plansResult.value)
+        } else {
+          setError((current) => current ?? 'Failed to load plans')
+        }
       })
-      .catch(() => setError('Failed to load customers'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -322,6 +331,10 @@ export default function AdminDashboard() {
 
       {/* Main panel */}
       <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="mb-6 max-w-6xl">
+          <SpendTrackerPanel />
+        </div>
+
         {error && (
           <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center justify-between">
             {error}
