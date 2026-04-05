@@ -450,6 +450,7 @@ export default function SalesDashboard() {
     creditsTotal: number | null
     usedQuotaPercent: number | null
   } | null>(null)
+  const [sendGridUsageError, setSendGridUsageError] = useState<string | null>(null)
   const [exaUsage, setExaUsage] = useState<{
     totalCostUsd: number | null
     apiKeyName: string | null
@@ -460,6 +461,7 @@ export default function SalesDashboard() {
       amountUsd: number | null
     }>
   } | null>(null)
+  const [exaUsageError, setExaUsageError] = useState<string | null>(null)
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -596,6 +598,7 @@ export default function SalesDashboard() {
     fetchExaUsage(spendMonth)
       .then((data) => {
         if (cancelled) return
+        setExaUsageError(null)
         setExaUsage({
           totalCostUsd: data.totalCostUsd,
           apiKeyName: data.apiKeyName,
@@ -603,8 +606,10 @@ export default function SalesDashboard() {
           topLineItems: data.topLineItems,
         })
       })
-      .catch(() => {
-        if (!cancelled) setExaUsage(null)
+      .catch((err) => {
+        if (!cancelled) return
+        setExaUsage(null)
+        setExaUsageError(err instanceof Error ? err.message : 'Could not load Exa usage.')
       })
 
     return () => {
@@ -620,14 +625,17 @@ export default function SalesDashboard() {
     fetchSendGridUsage(spendMonth)
       .then((data) => {
         if (cancelled) return
+        setSendGridUsageError(null)
         setSendGridUsage({
           creditsRemaining: data.creditsRemaining,
           creditsTotal: data.creditsTotal,
           usedQuotaPercent: data.usedQuotaPercent,
         })
       })
-      .catch(() => {
-        if (!cancelled) setSendGridUsage(null)
+      .catch((err) => {
+        if (!cancelled) return
+        setSendGridUsage(null)
+        setSendGridUsageError(err instanceof Error ? err.message : 'Could not load SendGrid usage.')
       })
 
     return () => {
@@ -1505,7 +1513,7 @@ export default function SalesDashboard() {
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-neutral-500">
-                      Usage helper unavailable right now. SendGrid spend stays manual.
+                      {sendGridUsageError || 'Usage helper unavailable right now. SendGrid spend stays manual.'}
                     </p>
                   )}
                 </div>
@@ -1563,7 +1571,7 @@ export default function SalesDashboard() {
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-neutral-500">
-                      Exa usage helper unavailable right now. This needs `EXA_SERVICE_API_KEY` and `EXA_API_KEY_ID` on the server.
+                      {exaUsageError || 'Exa usage helper unavailable right now. This needs `EXA_SERVICE_API_KEY` and `EXA_API_KEY_ID` on the server.'}
                     </p>
                   )}
                 </div>

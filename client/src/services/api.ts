@@ -12,7 +12,16 @@ async function authGet<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (!res.ok) {
+    let message = `API error: ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.error) message = String(data.error)
+    } catch {
+      // Keep fallback message.
+    }
+    throw new Error(message)
+  }
   return res.json()
 }
 
@@ -26,7 +35,16 @@ async function authPost<T>(path: string, body?: unknown): Promise<T> {
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (!res.ok) {
+    let message = `API error: ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.error) message = String(data.error)
+    } catch {
+      // Keep fallback message.
+    }
+    throw new Error(message)
+  }
   return res.json()
 }
 
@@ -40,7 +58,16 @@ async function authPatch<T>(path: string, body: unknown): Promise<T> {
     },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (!res.ok) {
+    let message = `API error: ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.error) message = String(data.error)
+    } catch {
+      // Keep fallback message.
+    }
+    throw new Error(message)
+  }
   return res.json()
 }
 
@@ -50,7 +77,16 @@ async function authDelete<T>(path: string): Promise<T> {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (!res.ok) {
+    let message = `API error: ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.error) message = String(data.error)
+    } catch {
+      // Keep fallback message.
+    }
+    throw new Error(message)
+  }
   return res.json()
 }
 
