@@ -28,6 +28,7 @@ interface PortalStats {
     replied: number
     booked: number
     unsubscribed: number
+    bounced?: number
     weekEmailed: number
   }
   recentLeads: Array<{
@@ -49,6 +50,7 @@ interface PortalStats {
     replied: number
     booked: number
     unsubscribed: number
+    bounced?: number
     avg_score: number | null
     last_lead_at: string | null
   }>
@@ -97,6 +99,7 @@ const statusColors: Record<string, string> = {
   emailed: 'bg-neutral-100 text-neutral-500',
   sent: 'bg-neutral-100 text-neutral-500',
   unsubscribed: 'bg-red-50 text-red-400',
+  bounced: 'bg-orange-50 text-orange-600',
   disqualified: 'bg-neutral-50 text-neutral-400',
 }
 
@@ -1288,6 +1291,10 @@ export default function SalesDashboard() {
                     <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
                       <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsubscribed</p>
                       <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.unsubscribed || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.bounced || 0}</p>
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
                       <p className="text-[11px] tracking-widest uppercase text-neutral-400">Avg Score</p>
