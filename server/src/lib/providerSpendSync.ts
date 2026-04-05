@@ -16,6 +16,13 @@ interface SyncSummary {
   skippedProviders: SyncSkip[]
 }
 
+export interface SendGridUsageSummary {
+  month: string
+  creditsRemaining: number | null
+  usedQuotaPercent: number | null
+  creditsTotal: number | null
+}
+
 const SUPPORTED_PROVIDER_SLUGS = ['openai', 'claude', 'twilio', 'digitalocean', 'aws'] as const
 
 function monthStart(month: string): Date {
@@ -73,6 +80,44 @@ async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
     throw new Error(`${res.status} ${res.statusText}${body ? `: ${body.slice(0, 160)}` : ''}`)
   }
   return res.json()
+}
+
+export async function fetchSendGridUsage(month: string): Promise<SendGridUsageSummary> {
+  const apiKey = process.env.SENDGRID_API_KEY
+  if (!apiKey) {
+    throw new Error('Missing SENDGRID_API_KEY')
+  }
+
+  const json = await fetchJson('https://api.sendgrid.com/v3/user/credits', {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+  })
+
+  const payload = json as {
+    remain?: unknown
+    total?: unknown
+    used?: unknown
+  }
+
+  const creditsRemaining = parseMoneyValue(payload.remain)
+  const creditsTotal = parseMoneyValue(payload.total)
+  const used = parseMoneyValue(payload.used)
+  const usedQuotaPercent =
+    creditsTotal && creditsRemaining !== null
+      ? Number((((creditsTotal - creditsRemaining) / creditsTotal) * 100).toFixed(1))
+      : used !== null
+        ? used
+        : null
+
+  return {
+    month,
+    creditsRemaining,
+    creditsTotal,
+    usedQuotaPercent:
+      usedQuotaPercent !== null && Number.isFinite(usedQuotaPercent) ? usedQuotaPercent : null,
+  }
 }
 
 async function fetchOpenAiMonthSpend(month: string): Promise<number> {

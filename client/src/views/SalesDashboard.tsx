@@ -20,7 +20,12 @@ import {
 } from 'recharts'
 import PageHeader from '../components/PageHeader'
 import { useAuth } from '../hooks/useAuth'
-import { fetchProviderSpend, saveProviderSpend, syncProviderSpend } from '../services/api'
+import {
+  fetchProviderSpend,
+  fetchSendGridUsage,
+  saveProviderSpend,
+  syncProviderSpend,
+} from '../services/api'
 
 const SALES_API = 'https://sales.ivera.ca'
 
@@ -439,6 +444,11 @@ export default function SalesDashboard() {
   const [spendSyncing, setSpendSyncing] = useState(false)
   const [spendStatus, setSpendStatus] = useState<string | null>(null)
   const [spendApiAvailable, setSpendApiAvailable] = useState(false)
+  const [sendGridUsage, setSendGridUsage] = useState<{
+    creditsRemaining: number | null
+    creditsTotal: number | null
+    usedQuotaPercent: number | null
+  } | null>(null)
   const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -560,6 +570,29 @@ export default function SalesDashboard() {
       })
       .finally(() => {
         if (!cancelled) setSpendLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [role, spendMonth])
+
+  useEffect(() => {
+    if (role !== 'ivera_admin') return
+
+    let cancelled = false
+
+    fetchSendGridUsage(spendMonth)
+      .then((data) => {
+        if (cancelled) return
+        setSendGridUsage({
+          creditsRemaining: data.creditsRemaining,
+          creditsTotal: data.creditsTotal,
+          usedQuotaPercent: data.usedQuotaPercent,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setSendGridUsage(null)
       })
 
     return () => {
@@ -1408,6 +1441,38 @@ export default function SalesDashboard() {
                   <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
                   <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
                   <p className="mt-1 text-xs text-neutral-400">Auto-sync is live for OpenAI, Claude, Twilio, DigitalOcean, and AWS. The rest stay editable here until we wire their billing APIs too.</p>
+                </div>
+
+                <div className="rounded-xl border border-neutral-200 bg-white/80 px-4 py-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">SendGrid Usage</p>
+                  {sendGridUsage ? (
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs text-neutral-500">Credits Remaining</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                          {sendGridUsage.creditsRemaining ?? '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-500">Credits Total</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                          {sendGridUsage.creditsTotal ?? '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-neutral-500">Quota Used</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                          {sendGridUsage.usedQuotaPercent !== null && sendGridUsage.usedQuotaPercent !== undefined
+                            ? `${sendGridUsage.usedQuotaPercent}%`
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-neutral-500">
+                      Usage helper unavailable right now. SendGrid spend stays manual.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between gap-3">

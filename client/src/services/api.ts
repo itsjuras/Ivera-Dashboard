@@ -113,6 +113,13 @@ export interface ProviderSpendSyncResult {
   }>
 }
 
+export interface SendGridUsageSummary {
+  month: string
+  creditsRemaining: number | null
+  usedQuotaPercent: number | null
+  creditsTotal: number | null
+}
+
 export type Role = 'ivera_admin' | 'customer'
 
 export interface UserProduct {
@@ -283,4 +290,10 @@ export async function syncProviderSpend(
   month: string,
 ): Promise<ProviderSpendSyncResult> {
   return authPost('/api/spend/sync', { month })
+}
+
+export function fetchSendGridUsage(
+  month: string,
+): Promise<SendGridUsageSummary> {
+  return authGet(`/api/spend/sendgrid-usage?month=${encodeURIComponent(month)}`)
 }

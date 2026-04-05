@@ -1,7 +1,7 @@
 import type { Response } from 'express'
 import type { AuthRequest } from '../middleware/requireAuth'
 import { listProviderSpend, upsertProviderSpend } from '../models/spendModel'
-import { syncProviderSpend } from '../lib/providerSpendSync'
+import { fetchSendGridUsage, syncProviderSpend } from '../lib/providerSpendSync'
 
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7)
@@ -67,6 +67,18 @@ export async function syncProviderSpendController(req: AuthRequest, res: Respons
   } catch (err: unknown) {
     console.error('syncProviderSpend failed:', err)
     const message = err instanceof Error ? err.message : 'Failed to sync provider spend'
+    res.status(500).json({ error: message })
+  }
+}
+
+export async function getSendGridUsage(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : currentMonth()
+    const usage = await fetchSendGridUsage(month)
+    res.json(usage)
+  } catch (err: unknown) {
+    console.error('getSendGridUsage failed:', err)
+    const message = err instanceof Error ? err.message : 'Failed to load SendGrid usage'
     res.status(500).json({ error: message })
   }
 }
