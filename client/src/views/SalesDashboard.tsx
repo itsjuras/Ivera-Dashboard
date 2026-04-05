@@ -6,7 +6,6 @@ import {
   Reply,
   SlidersHorizontal,
   Play,
-  Sparkles,
   X,
 } from 'lucide-react'
 import {
@@ -64,20 +63,6 @@ interface CampaignConfig {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
-}
-
-interface CampaignAssessment {
-  summary: string
-  strengths: string[]
-  issues: string[]
-  recommendations: string[]
-  suggestedConfig: CampaignConfig
-  changeSet: Array<{
-    field: string
-    from: string | number | null
-    to: string | number | null
-    reason: string
-  }>
 }
 
 interface ProspectHistory {
@@ -176,6 +161,16 @@ function recentReplyCount(leads: PortalStats['recentLeads']) {
 function latestRunLabel(campaigns: PortalStats['campaigns']) {
   if (campaigns.length === 0) return 'No runs yet'
   return `Latest ${timeAgo(campaigns[0].created_at)}`
+}
+
+function formatRunDate(iso: string) {
+  return new Intl.DateTimeFormat('en-CA', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(iso))
 }
 
 function getNextScheduledCampaignRun(now = new Date()) {
@@ -294,11 +289,13 @@ function ListCard({
   subtitle,
   rows,
   emptyLabel,
+  onRowClick,
 }: {
   title: string
   subtitle: string
   rows: Array<{ id: string; title: string; meta: string; badge?: string }>
   emptyLabel: string
+  onRowClick?: (id: string) => void
 }) {
   return (
     <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
@@ -312,7 +309,14 @@ function ListCard({
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <div key={row.id} className="flex items-start justify-between gap-4 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+            <button
+              key={row.id}
+              type="button"
+              onClick={onRowClick ? () => onRowClick(row.id) : undefined}
+              className={`flex w-full items-start justify-between gap-4 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 text-left ${
+                onRowClick ? 'transition hover:bg-neutral-50/80' : ''
+              }`}
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-neutral-900">{row.title}</p>
                 <p className="mt-1 text-xs text-neutral-500">{row.meta}</p>
@@ -322,7 +326,7 @@ function ListCard({
                   {row.badge}
                 </span>
               ) : null}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -398,13 +402,10 @@ export default function SalesDashboard() {
   const [adminActionMessage, setAdminActionMessage] = useState<string | null>(null)
   const [adminActionError, setAdminActionError] = useState<string | null>(null)
   const [runningCampaign, setRunningCampaign] = useState(false)
-  const [reassessingCampaign, setReassessingCampaign] = useState(false)
-  const [applyingAssessment, setApplyingAssessment] = useState(false)
-  const [reassessInput, setReassessInput] = useState('')
   const [expectedLeadMin, setExpectedLeadMin] = useState('')
   const [expectedLeadMax, setExpectedLeadMax] = useState('')
   const [manualLeadOverride, setManualLeadOverride] = useState('')
-  const [assessment, setAssessment] = useState<CampaignAssessment | null>(null)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -541,13 +542,18 @@ export default function SalesDashboard() {
 
   const latestCampaignRuns = useMemo(
     () =>
-      campaigns.slice(0, 4).map((campaign) => ({
+      campaigns.slice(0, 8).map((campaign) => ({
         id: campaign.id,
         title: campaign.product_name || 'Campaign run',
-        meta: `${campaign.target_description || 'No target description'} · ${timeAgo(campaign.created_at)}`,
+        meta: formatRunDate(campaign.created_at),
         badge: `${campaign.total_leads || 0} leads`,
       })),
     [campaigns],
+  )
+
+  const selectedRun = useMemo(
+    () => campaigns.find((campaign) => campaign.id === selectedRunId) ?? null,
+    [campaigns, selectedRunId],
   )
 
   const engagedProspects = useMemo(
@@ -655,59 +661,6 @@ export default function SalesDashboard() {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to start campaign.')
     } finally {
       setRunningCampaign(false)
-    }
-  }
-
-  async function handleReassessCampaign() {
-    if (!session?.access_token) return
-    setReassessingCampaign(true)
-    setAdminActionError(null)
-    setAdminActionMessage(null)
-
-    try {
-      const data = await salesRequest<{ assessment: CampaignAssessment }>(session.access_token, '/campaign/reassess', {
-        method: 'POST',
-        body: JSON.stringify({ admin_input: reassessInput.trim() || null }),
-      })
-      setAssessment(data.assessment)
-      setAdminActionMessage('Campaign reassessment ready.')
-    } catch (err) {
-      setAdminActionError(err instanceof Error ? err.message : 'Failed to reassess campaign.')
-    } finally {
-      setReassessingCampaign(false)
-    }
-  }
-
-  async function applyAssessment(runAfterSave = false) {
-    if (!session?.access_token || !assessment) return
-    setApplyingAssessment(true)
-    setAdminActionError(null)
-    setAdminActionMessage(null)
-
-    try {
-      const data = await salesRequest<{ config: CampaignConfig; message: string }>(session.access_token, '/campaign/config', {
-        method: 'PATCH',
-        body: JSON.stringify(assessment.suggestedConfig),
-      })
-
-      setCampaignConfig(data.config)
-      const savedDescription = data.config.target_description?.trim()
-      setAdminActionMessage(
-        runAfterSave
-          ? `Campaign changes saved. Starting a new run...${savedDescription ? ` New targeting: ${savedDescription}` : ''}`
-          : (data.message || 'Campaign changes saved.') + (savedDescription ? ` New targeting: ${savedDescription}` : ''),
-      )
-
-      if (runAfterSave) {
-        await handleRunCampaign()
-      }
-
-      setAssessment(null)
-      await refreshStats()
-    } catch (err) {
-      setAdminActionError(err instanceof Error ? err.message : 'Failed to apply campaign changes.')
-    } finally {
-      setApplyingAssessment(false)
     }
   }
 
@@ -1162,48 +1115,19 @@ export default function SalesDashboard() {
                   />
                 </div>
 
-                <div className="pt-2">
-                  <label
-                    htmlFor="reassess-input"
-                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
-                  >
-                    Reassess Focus
-                  </label>
-                  <textarea
-                    id="reassess-input"
-                    value={reassessInput}
-                    onChange={(event) => setReassessInput(event.target.value)}
-                    rows={4}
-                    placeholder="Example: tighten the ICP around clinics with poor reply rates, reduce fluff in the opening email, and prioritize prospects more likely to book this month."
-                    className="w-full max-w-3xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
-                  />
-                  <p className="mt-2 text-xs text-neutral-500">
-                    Optional guidance for the self-reassess routine. Leave blank for a purely data-driven review.
-                  </p>
-                </div>
-
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <button
                     type="button"
                     onClick={saveCampaignDescription}
-                    disabled={savingDescription || runningCampaign || reassessingCampaign || applyingAssessment}
+                    disabled={savingDescription || runningCampaign}
                     className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {savingDescription ? 'Saving...' : 'Save Description'}
                   </button>
                   <button
                     type="button"
-                    onClick={handleReassessCampaign}
-                    disabled={runningCampaign || reassessingCampaign || applyingAssessment || savingDescription}
-                    className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Sparkles size={12} />
-                    {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
-                  </button>
-                  <button
-                    type="button"
                     onClick={handleRunCampaign}
-                    disabled={runningCampaign || reassessingCampaign || applyingAssessment || savingDescription}
+                    disabled={runningCampaign || savingDescription}
                     className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Play size={12} />
@@ -1224,78 +1148,6 @@ export default function SalesDashboard() {
               </div>
             )}
           </div>
-
-          {assessment && (
-            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-3">
-                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Draft</p>
-                  <p className="max-w-3xl text-sm leading-relaxed text-neutral-700">{assessment.summary}</p>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Targeting</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-                        {assessment.suggestedConfig.target_description || 'No targeting description suggested.'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
-                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Positioning</p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-                        {assessment.suggestedConfig.product_context || 'No product context suggested.'}
-                      </p>
-                    </div>
-                  </div>
-                  {assessment.changeSet.length > 0 && (
-                    <div className="space-y-2">
-                      {assessment.changeSet.map((change) => (
-                        <div key={`${change.field}-${String(change.to)}`} className="rounded-lg border border-neutral-100 bg-white/70 px-4 py-3">
-                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">{change.field.replace(/_/g, ' ')}</p>
-                          <p className="mt-1 text-sm font-medium text-neutral-900">{String(change.from ?? '—')} → {String(change.to ?? '—')}</p>
-                          <p className="mt-1 text-sm text-neutral-600">{change.reason}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {assessment.recommendations.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {assessment.recommendations.map((recommendation) => (
-                        <span key={recommendation} className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-500">
-                          {recommendation}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => applyAssessment(false)}
-                    disabled={applyingAssessment}
-                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {applyingAssessment ? 'Saving...' : 'Save Changes'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyAssessment(true)}
-                    disabled={applyingAssessment || runningCampaign}
-                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Save + Try Again
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssessment(null)}
-                    disabled={applyingAssessment}
-                    className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500 transition hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1303,10 +1155,84 @@ export default function SalesDashboard() {
         <div className="mt-6">
           <ListCard
             title="Recent Runs"
-            subtitle="Latest recorded campaign runs with full targeting descriptions visible"
+            subtitle="Click any run to open the full targeting, positioning, and delivery details"
             rows={latestCampaignRuns}
             emptyLabel="No runs yet"
+            onRowClick={setSelectedRunId}
           />
+        </div>
+      )}
+
+      {selectedRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
+          <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Run</p>
+                <h3 className="mt-1 text-lg font-semibold text-neutral-900">
+                  {selectedRun.product_name || 'Campaign run'}
+                </h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {formatRunDate(selectedRun.created_at)} · {selectedRun.total_leads || 0} leads
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRunId(null)}
+                className="rounded-full border border-neutral-200 p-2 text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Targeting</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
+                    {selectedRun.target_description || 'No targeting description saved for this run.'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Metrics</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.qualified_leads || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Emailed</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.emailed || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.replied || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.booked || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsubscribed</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.unsubscribed || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Avg Score</p>
+                      <p className="mt-1 text-lg font-semibold text-neutral-900">
+                        {typeof selectedRun.avg_score === 'number' ? `${selectedRun.avg_score.toFixed(1)}/10` : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Last Lead Activity</p>
+                    <p className="mt-1 text-sm font-medium text-neutral-900">
+                      {selectedRun.last_lead_at ? formatRunDate(selectedRun.last_lead_at) : 'No lead activity recorded'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
