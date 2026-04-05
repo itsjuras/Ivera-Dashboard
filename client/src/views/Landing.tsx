@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Phone, Mail, BarChart3, MessageSquare, ChevronDown, Check } from 'lucide-react'
 import WaveBackground from '../components/WaveBackground'
+import { useAuth } from '../hooks/useAuth'
 
 const CAL_URL = 'https://cal.com/vaidas-makselis-wvjvqz/ivera-sales-agent'
 
@@ -330,8 +331,10 @@ function Steps({ steps }: { steps: typeof receptionistSteps }) {
 }
 
 export default function Landing() {
+  const { user } = useAuth()
   const sectionsRef = useRef<HTMLElement[]>([])
   const fadeRef = useRef<HTMLDivElement>(null)
+  const dashboardHref = user ? '/dashboard' : '/portal'
 
   useEffect(() => {
     const sections = sectionsRef.current
@@ -383,7 +386,7 @@ export default function Landing() {
             <a href="#consultant" className="opacity-60 hover:opacity-100 transition-opacity">Consultant</a>
             <a href="#support" className="opacity-60 hover:opacity-100 transition-opacity">Support</a>
             <a href="/about" className="opacity-60 hover:opacity-100 transition-opacity">About</a>
-            <a href="/portal" className="opacity-60 hover:opacity-100 transition-opacity">Dashboard</a>
+            <a href={dashboardHref} className="opacity-60 hover:opacity-100 transition-opacity">Dashboard</a>
           </div>
           <a
             href={CAL_URL}

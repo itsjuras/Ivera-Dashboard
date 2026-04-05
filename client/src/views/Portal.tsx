@@ -1,7 +1,15 @@
 import { LogIn, LayoutDashboard } from 'lucide-react'
+import { Navigate } from 'react-router-dom'
 import WaveBackground from '../components/WaveBackground'
+import { useAuth } from '../hooks/useAuth'
 
 export default function Portal() {
+  const { user, loading } = useAuth()
+
+  if (!loading && user) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   return (
     <div className="relative min-h-screen flex items-center justify-center">
       <WaveBackground backgroundColor="#171717" strokeColor="#2a2a2a" />
