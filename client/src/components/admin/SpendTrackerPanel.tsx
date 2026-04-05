@@ -72,6 +72,7 @@ export default function SpendTrackerPanel() {
   const [spendSyncing, setSpendSyncing] = useState(false)
   const [spendStatus, setSpendStatus] = useState<string | null>(null)
   const [spendApiAvailable, setSpendApiAvailable] = useState(false)
+  const [lastSharedUpdate, setLastSharedUpdate] = useState<string | null>(null)
   const [sendGridUsage, setSendGridUsage] = useState<{
     creditsRemaining: number | null
     creditsTotal: number | null
@@ -126,6 +127,12 @@ export default function SpendTrackerPanel() {
           }
           return nextState
         })
+        const latest = data.entries
+          .map((entry) => entry.updatedAt)
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1) ?? null
+        setLastSharedUpdate(latest)
         setSpendApiAvailable(true)
         setSpendStatus('Shared spend tracker connected.')
       })
@@ -244,6 +251,13 @@ export default function SpendTrackerPanel() {
         return nextState
       })
 
+      const latest = result.entries
+        .map((entry) => entry.updatedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null
+      setLastSharedUpdate(latest)
+
       setSpendApiAvailable(true)
 
       const syncedLabels = result.syncedProviders
@@ -329,6 +343,11 @@ export default function SpendTrackerPanel() {
           <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Tracked Monthly Spend</p>
           <p className="mt-1 text-2xl font-semibold">${totalProviderSpend.toFixed(2)}</p>
           <p className="mt-1 text-xs text-neutral-400">Auto-sync is live for OpenAI, Claude, Twilio, DigitalOcean, and AWS. SendGrid and Exa stay manual in the ledger, with usage helpers shown below.</p>
+          {lastSharedUpdate ? (
+            <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-neutral-500">
+              Last shared update {new Date(lastSharedUpdate).toLocaleString()}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

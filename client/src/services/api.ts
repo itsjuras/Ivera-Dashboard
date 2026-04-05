@@ -137,6 +137,7 @@ export interface ProviderSpendEntry {
   providerSlug: string
   amountCad: number | null
   notes: string | null
+  updatedAt?: string | null
 }
 
 export interface ProviderSpendSyncResult {

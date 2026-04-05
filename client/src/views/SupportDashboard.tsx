@@ -69,6 +69,8 @@ export default function SupportDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
   const [selectedArticle, setSelectedArticle] = useState<KBArticle | null>(null)
+  const [articleDraft, setArticleDraft] = useState({ title: '', content: '' })
+  const [articleSaving, setArticleSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reply, setReply] = useState('')
@@ -146,6 +148,21 @@ export default function SupportDashboard() {
     await fetch(`${API}/support/kb/${id}`, { method: 'DELETE', headers: authHeaders() })
     if (selectedArticle?.id === id) setSelectedArticle(null)
     load()
+  }
+
+  async function saveArticleEdits() {
+    if (!selectedArticle) return
+    setArticleSaving(true)
+    await fetch(`${API}/support/kb/${selectedArticle.id}`, {
+      method: 'PATCH',
+      headers: jsonHeaders(),
+      body: JSON.stringify(articleDraft),
+    })
+    setSelectedArticle((current) => current ? { ...current, ...articleDraft } : current)
+    setKbArticles((current) =>
+      current.map((article) => (article.id === selectedArticle.id ? { ...article, ...articleDraft } : article)),
+    )
+    setArticleSaving(false)
   }
 
   async function handleIngestUrl() {
@@ -370,7 +387,10 @@ export default function SupportDashboard() {
                     <div key={a.id} className="flex items-center justify-between gap-4 px-4 py-3 bg-neutral-50 border border-neutral-100 rounded-xl">
                       <button
                         type="button"
-                        onClick={() => setSelectedArticle(a)}
+                        onClick={() => {
+                          setSelectedArticle(a)
+                          setArticleDraft({ title: a.title || '', content: a.content || '' })
+                        }}
                         className="min-w-0 flex-1 text-left"
                       >
                         <div className="text-xs font-medium text-neutral-900">{a.title}</div>
@@ -409,22 +429,44 @@ export default function SupportDashboard() {
                   {selectedArticle.source_type} · {new Date(selectedArticle.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedArticle(null)}
-                className="rounded-full border border-neutral-200 px-3 py-2 text-xs uppercase tracking-wider text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={saveArticleEdits}
+                  disabled={articleSaving}
+                  className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-2 text-xs uppercase tracking-wider text-white transition hover:bg-neutral-800 disabled:opacity-50"
+                >
+                  {articleSaving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticle(null)}
+                  className="rounded-full border border-neutral-200 px-3 py-2 text-xs uppercase tracking-wider text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+                >
+                  Close
+                </button>
+              </div>
             </div>
             <div className="overflow-y-auto px-6 py-5">
-              {selectedArticle.content ? (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-                  {selectedArticle.content}
-                </div>
-              ) : (
-                <p className="text-sm text-neutral-500">This article has no stored body content.</p>
-              )}
+              <div className="space-y-4">
+                <label className="block space-y-2">
+                  <span className="text-[11px] uppercase tracking-wider text-neutral-400">Title</span>
+                  <input
+                    value={articleDraft.title}
+                    onChange={(event) => setArticleDraft((current) => ({ ...current, title: event.target.value }))}
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                  />
+                </label>
+                <label className="block space-y-2">
+                  <span className="text-[11px] uppercase tracking-wider text-neutral-400">Content</span>
+                  <textarea
+                    value={articleDraft.content}
+                    onChange={(event) => setArticleDraft((current) => ({ ...current, content: event.target.value }))}
+                    rows={18}
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                  />
+                </label>
+              </div>
             </div>
           </div>
         </div>

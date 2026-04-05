@@ -4,6 +4,7 @@ export interface ProviderSpendEntry {
   providerSlug: string
   amountCad: number | null
   notes: string | null
+  updatedAt?: string | null
 }
 
 function monthToDate(month: string): string {
@@ -18,7 +19,7 @@ export async function listProviderSpend(month: string): Promise<ProviderSpendEnt
   const periodMonth = monthToDate(month)
   const { data, error } = await supabase
     .from('provider_spend_entries')
-    .select('provider_slug, amount_cad, notes')
+    .select('provider_slug, amount_cad, notes, updated_at')
     .eq('period_month', periodMonth)
     .order('provider_slug', { ascending: true })
 
@@ -28,6 +29,7 @@ export async function listProviderSpend(month: string): Promise<ProviderSpendEnt
     providerSlug: row.provider_slug as string,
     amountCad: row.amount_cad as number | null,
     notes: row.notes as string | null,
+    updatedAt: row.updated_at as string | null,
   }))
 }
 
