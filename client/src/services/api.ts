@@ -7,12 +7,6 @@ async function getToken(): Promise<string | null> {
   return data.session?.access_token ?? null
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
-  return res.json()
-}
-
 async function authGet<T>(path: string): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_BASE}${path}`, {
