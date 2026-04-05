@@ -62,12 +62,17 @@ function now() {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export default function ConsultantDashboard() {
+export default function ConsultantDashboard({
+  mode = 'demo',
+}: {
+  mode?: 'demo' | 'test'
+}) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const isTestMode = mode === 'test'
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -114,20 +119,28 @@ export default function ConsultantDashboard() {
         <div className="relative flex flex-col flex-1 overflow-y-auto">
           <div className="px-5 pt-16 pb-4 border-b border-neutral-200/60">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-semibold tracking-wider uppercase text-neutral-900">Business Consultant</span>
+              <span className="text-sm font-semibold tracking-wider uppercase text-neutral-900">
+                {isTestMode ? 'Consultant Test Workspace' : 'Business Consultant'}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-              <span className="text-xs text-neutral-400 tracking-widest uppercase">Preview</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isTestMode ? 'bg-blue-400' : 'bg-amber-400'}`} />
+              <span className="text-xs text-neutral-400 tracking-widest uppercase">
+                {isTestMode ? 'Test Data' : 'Preview'}
+              </span>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-neutral-500">
-              This workspace is still using sample consultant insights, not live customer data yet.
+              {isTestMode
+                ? 'This logged-in consultant workspace is using seeded test insights so we can validate the product experience before live integrations are connected.'
+                : 'This workspace is still using sample consultant insights, not live customer data yet.'}
             </p>
           </div>
 
           {/* Connected Sources */}
           <div className="px-5 py-4 border-b border-neutral-200/60">
-            <p className="text-xs tracking-widest text-neutral-400 uppercase mb-3">Connected Sources</p>
+            <p className="text-xs tracking-widest text-neutral-400 uppercase mb-3">
+              {isTestMode ? 'Test Sources' : 'Connected Sources'}
+            </p>
             <div className="space-y-2.5">
               {sources.map((s) => (
                 <div key={s.name} className="flex items-start gap-2.5">
@@ -143,7 +156,9 @@ export default function ConsultantDashboard() {
 
           {/* KPIs */}
           <div className="px-5 py-4 flex-1">
-            <p className="text-xs tracking-widest text-neutral-400 uppercase mb-3">Live KPIs</p>
+            <p className="text-xs tracking-widest text-neutral-400 uppercase mb-3">
+              {isTestMode ? 'Test KPIs' : 'Live KPIs'}
+            </p>
             <div className="grid grid-cols-2 gap-2">
               {kpis.map((k) => (
                 <div key={k.label} className="bg-neutral-50 rounded-lg p-2.5">
@@ -167,14 +182,18 @@ export default function ConsultantDashboard() {
             /* Welcome state */
             <div className="flex flex-col items-center justify-center h-full max-w-lg mx-auto text-center">
               <div className="flex items-center gap-1.5 mb-4">
-                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                <span className="text-xs tracking-widest text-neutral-400 uppercase">Live</span>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${isTestMode ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                <span className="text-xs tracking-widest text-neutral-400 uppercase">
+                  {isTestMode ? 'Test Mode' : 'Live'}
+                </span>
               </div>
               <h2 className="text-2xl font-semibold text-neutral-900 tracking-wide uppercase mb-3">
-                Your business, analysed.
+                {isTestMode ? 'Test your consultant workflow.' : 'Your business, analysed.'}
               </h2>
               <p className="text-xs text-neutral-500 tracking-wider leading-relaxed uppercase mb-10 max-w-sm">
-                Connected to your CRM, payments, and analytics. Ask any question and get a data-backed answer.
+                {isTestMode
+                  ? 'Using seeded crm, revenue, and analytics examples so we can validate the dashboard, questions, and insights flow.'
+                  : 'Connected to your CRM, payments, and analytics. Ask any question and get a data-backed answer.'}
               </p>
               <div className="grid grid-cols-2 gap-3 w-full">
                 {suggestions.map(({ icon: Icon, text }) => (
