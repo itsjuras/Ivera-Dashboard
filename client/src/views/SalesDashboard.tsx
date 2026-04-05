@@ -116,7 +116,7 @@ const statusColors: Record<string, string> = {
   disqualified: 'bg-neutral-50 text-neutral-400',
 }
 
-type OverviewDays = 7 | 14 | 30
+type OverviewDays = 0 | 7 | 14 | 30
 type ProspectDays = 0 | 7 | 14 | 30
 type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'leadQuality' | 'prospects'
@@ -210,18 +210,35 @@ function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
     }
   >()
 
-  for (let offset = days - 1; offset >= 0; offset -= 1) {
-    const date = new Date()
-    date.setHours(0, 0, 0, 0)
-    date.setDate(date.getDate() - offset)
-    const key = date.toISOString().slice(0, 10)
-    byDay.set(key, {
-      day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      sent: 0,
-      replied: 0,
-      booked: 0,
-      unsubscribed: 0,
-    })
+  if (days === 0) {
+    const sortedKeys = Array.from(
+      new Set(leads.map((lead) => new Date(lead.created_at).toISOString().slice(0, 10))),
+    ).sort()
+
+    for (const key of sortedKeys) {
+      const date = new Date(`${key}T00:00:00.000Z`)
+      byDay.set(key, {
+        day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        sent: 0,
+        replied: 0,
+        booked: 0,
+        unsubscribed: 0,
+      })
+    }
+  } else {
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+      const date = new Date()
+      date.setHours(0, 0, 0, 0)
+      date.setDate(date.getDate() - offset)
+      const key = date.toISOString().slice(0, 10)
+      byDay.set(key, {
+        day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        sent: 0,
+        replied: 0,
+        booked: 0,
+        unsubscribed: 0,
+      })
+    }
   }
 
   for (const lead of leads) {
@@ -553,6 +570,8 @@ export default function SalesDashboard() {
     [recentLeads, overviewDays],
   )
 
+  const overviewWindowLabel = overviewDays === 0 ? 'All time' : `Last ${overviewDays} days`
+
   const filteredProspects = useMemo(() => {
     return recentLeads.filter((lead) => {
       if (!leadWithinDays(lead.created_at, prospectDays)) return false
@@ -657,19 +676,19 @@ export default function SalesDashboard() {
   )
 
   const outreachMetrics = [
-    { label: 'Sent In Window', value: overviewSummary.sent, hint: `Last ${overviewDays} days` },
+    { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
     { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Rolling 7 days' },
     { label: 'Campaign Runs', value: campaigns.length, hint: 'Recorded runs' },
     { label: 'Latest Run', value: latestRunLabel(campaigns), hint: 'Most recent activity' },
   ]
   const engagementMetrics = [
-    { label: 'Replies', value: overviewSummary.replied, hint: `Last ${overviewDays} days` },
+    { label: 'Replies', value: overviewSummary.replied, hint: overviewWindowLabel },
     { label: 'Reply Rate', value: replyRate(overviewSummary.replied, overviewSummary.sent), hint: 'Replies divided by sent' },
-    { label: 'Unsubscribed', value: overviewSummary.unsubscribed, hint: `Last ${overviewDays} days` },
+    { label: 'Unsubscribed', value: overviewSummary.unsubscribed, hint: overviewWindowLabel },
     { label: 'Unsub Rate', value: unsubscribeRate(overviewSummary.unsubscribed, overviewSummary.sent), hint: 'Opt-outs divided by sent' },
   ]
   const pipelineMetrics = [
-    { label: 'Meetings Booked', value: overviewSummary.booked, hint: `Last ${overviewDays} days` },
+    { label: 'Meetings Booked', value: overviewSummary.booked, hint: overviewWindowLabel },
     { label: 'Booked Rate', value: bookingRate(overviewSummary.booked, overviewSummary.sent), hint: 'Booked divided by sent' },
     { label: 'Pipeline Leads', value: overviewSummary.pipeline, hint: 'Prospects in current window' },
     { label: 'Recent Replies', value: overviewSummary.recentReplies, hint: 'Replies or bookings in window' },
@@ -943,6 +962,13 @@ export default function SalesDashboard() {
                       {days}d
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setOverviewDays(0)}
+                    className={tabButtonClass(overviewDays === 0)}
+                  >
+                    All Time
+                  </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
