@@ -1186,16 +1186,10 @@ export default function SalesDashboard() {
             </div>
 
             <div className="overflow-y-auto px-6 py-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
-                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Targeting</p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-                    {selectedRun.target_description || 'No targeting description saved for this run.'}
-                  </p>
-                </div>
+              <div className="space-y-4">
                 <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
                   <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Metrics</p>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
                     <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
                       <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
                       <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.qualified_leads || 0}</p>
@@ -1222,13 +1216,20 @@ export default function SalesDashboard() {
                         {typeof selectedRun.avg_score === 'number' ? `${selectedRun.avg_score.toFixed(1)}/10` : '—'}
                       </p>
                     </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3 md:col-span-2 xl:col-span-1">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Last Lead Activity</p>
+                      <p className="mt-1 text-sm font-medium text-neutral-900">
+                        {selectedRun.last_lead_at ? formatRunDate(selectedRun.last_lead_at) : 'No lead activity recorded'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="mt-3 rounded-lg border border-neutral-100 bg-white px-3 py-3">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Last Lead Activity</p>
-                    <p className="mt-1 text-sm font-medium text-neutral-900">
-                      {selectedRun.last_lead_at ? formatRunDate(selectedRun.last_lead_at) : 'No lead activity recorded'}
-                    </p>
-                  </div>
+                </div>
+
+                <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Targeting</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
+                    {selectedRun.target_description || 'No targeting description saved for this run.'}
+                  </p>
                 </div>
               </div>
             </div>
