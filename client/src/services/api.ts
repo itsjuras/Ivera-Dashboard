@@ -150,19 +150,19 @@ export interface CustomerSummary {
 // ── Dashboard / existing endpoints ────────────────────────────────────────
 
 export function fetchStats(): Promise<DashboardStats> {
-  return get('/api/dashboard/stats')
+  return authGet('/api/dashboard/stats')
 }
 
 export function fetchBookings(): Promise<Booking[]> {
-  return get('/api/bookings')
+  return authGet('/api/bookings')
 }
 
 export function fetchClients(): Promise<Client[]> {
-  return get('/api/clients')
+  return authGet('/api/clients')
 }
 
 export function fetchPayments(): Promise<Payment[]> {
-  return get('/api/payments')
+  return authGet('/api/payments')
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────
