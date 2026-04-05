@@ -303,7 +303,14 @@ function ListCard({
 }: {
   title: string
   subtitle: string
-  rows: Array<{ id: string; title: string; meta: string; badge?: string; interactive?: boolean }>
+  rows: Array<{
+    id: string
+    title: string
+    meta: string
+    badge?: string
+    interactive?: boolean
+    metrics?: Array<{ label: string; value: string | number }>
+  }>
   emptyLabel: string
   onRowClick?: (id: string) => void
 }) {
@@ -330,6 +337,16 @@ function ListCard({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-neutral-900">{row.title}</p>
                 <p className="mt-1 text-xs text-neutral-500">{row.meta}</p>
+                {row.metrics?.length ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+                    {row.metrics.map((metric) => (
+                      <div key={metric.label} className="rounded-md border border-neutral-100 bg-neutral-50/80 px-2.5 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">{metric.label}</p>
+                        <p className="mt-1 text-sm font-semibold text-neutral-900">{metric.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {row.badge ? (
                 <span className="shrink-0 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
@@ -563,6 +580,18 @@ export default function SalesDashboard() {
         title: campaign.product_name || 'Campaign run',
         meta: formatRunDate(campaign.created_at),
         badge: `${campaign.total_leads || 0} leads`,
+        metrics: [
+          { label: 'Qualified', value: campaign.qualified_leads || 0 },
+          { label: 'Emailed', value: campaign.emailed || 0 },
+          { label: 'Replies', value: campaign.replied || 0 },
+          { label: 'Booked', value: campaign.booked || 0 },
+          { label: 'Unsub', value: campaign.unsubscribed || 0 },
+          { label: 'Bounce', value: campaign.bounced || 0 },
+          {
+            label: 'Avg Score',
+            value: typeof campaign.avg_score === 'number' ? `${campaign.avg_score.toFixed(1)}/10` : '—',
+          },
+        ],
       }))
 
       if (!pendingRun) return rows
