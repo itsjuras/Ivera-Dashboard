@@ -44,6 +44,38 @@ interface PortalStats {
     product_name: string
     target_description: string
     created_at: string
+    funnel_diagnostics?: {
+      requested_leads?: number
+      effective_run_limit?: number
+      manual_override?: boolean
+      raw_candidates?: number
+      duplicate_candidates?: number
+      fresh_candidates?: number
+      enriched_contacts?: number
+      qualified?: number
+      email_found?: number
+      no_email_found?: number
+      leads_saved?: number
+      sent?: number
+      send_errors?: number
+      warmup_limit?: number | null
+      reached_warmup_limit?: boolean
+      reached_run_target?: boolean
+      search_queries?: string[]
+      search_passes?: Array<{
+        query: string
+        raw_candidates: number
+        fresh_added: number
+        duplicate_candidates?: number
+      }>
+      status_breakdown?: {
+        replied?: number
+        booked?: number
+        unsubscribed?: number
+        bounced?: number
+      }
+      updated_at?: string
+    }
     total_leads: number
     qualified_leads: number
     emailed: number
@@ -211,6 +243,24 @@ function formatScheduledRun(date: Date | null) {
   }).format(date)
 }
 
+function buildFunnelSummary(
+  diagnostics: PortalStats['campaigns'][number]['funnel_diagnostics'] | undefined,
+) {
+  if (!diagnostics) return null
+
+  const parts = [
+    ['raw', diagnostics.raw_candidates],
+    ['fresh', diagnostics.fresh_candidates],
+    ['qualified', diagnostics.qualified],
+    ['email', diagnostics.email_found],
+    ['sent', diagnostics.sent],
+  ]
+    .filter(([, value]) => typeof value === 'number')
+    .map(([label, value]) => `${label} ${value}`)
+
+  return parts.length ? parts.join(' → ') : null
+}
+
 function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
   const byDay = new Map<
     string,
@@ -310,6 +360,7 @@ function ListCard({
     badge?: string
     interactive?: boolean
     metrics?: Array<{ label: string; value: string | number }>
+    detail?: string
   }>
   emptyLabel: string
   onRowClick?: (id: string) => void
@@ -337,6 +388,9 @@ function ListCard({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-neutral-900">{row.title}</p>
                 <p className="mt-1 text-xs text-neutral-500">{row.meta}</p>
+                {row.detail ? (
+                  <p className="mt-2 text-xs text-neutral-600">{row.detail}</p>
+                ) : null}
                 {row.metrics?.length ? (
                   <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
                     {row.metrics.map((metric) => (
@@ -580,6 +634,7 @@ export default function SalesDashboard() {
         title: campaign.product_name || 'Campaign run',
         meta: formatRunDate(campaign.created_at),
         badge: `${campaign.total_leads || 0} leads`,
+        detail: buildFunnelSummary(campaign.funnel_diagnostics) || undefined,
         metrics: [
           { label: 'Qualified', value: campaign.qualified_leads || 0 },
           { label: 'Emailed', value: campaign.emailed || 0 },
@@ -617,6 +672,7 @@ export default function SalesDashboard() {
     () => campaigns.find((campaign) => campaign.id === selectedRunId) ?? null,
     [campaigns, selectedRunId],
   )
+  const latestRunDiagnostics = campaigns[0]?.funnel_diagnostics
 
   const engagedProspects = useMemo(
     () =>
@@ -973,6 +1029,48 @@ export default function SalesDashboard() {
 
           <div className="space-y-4">
             <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
+            {latestRunDiagnostics ? (
+              <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-900">Latest Funnel</h3>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Where the most recent run narrowed from search to sent outreach
+                    </p>
+                  </div>
+                  <p className="text-xs text-neutral-400">
+                    target {latestRunDiagnostics.requested_leads ?? '—'} · effective {latestRunDiagnostics.effective_run_limit ?? '—'}
+                  </p>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Raw</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.raw_candidates ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Exa candidates returned</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Fresh</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.fresh_candidates ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">After dedupe</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.qualified ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Scored 7/10 or higher</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Found</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.email_found ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Personal contact found</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.sent ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Delivered into the run</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : activeTab === 'engagement' ? (
@@ -1339,6 +1437,63 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {selectedRun.funnel_diagnostics ? (
+                  <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Funnel Diagnostics</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          This shows exactly where the run narrowed from search to outreach.
+                        </p>
+                      </div>
+                      <p className="text-xs text-neutral-400">
+                        requested {selectedRun.funnel_diagnostics.requested_leads ?? '—'} · effective {selectedRun.funnel_diagnostics.effective_run_limit ?? '—'}
+                      </p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Raw</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.raw_candidates ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Duplicates</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.duplicate_candidates ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Fresh</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.fresh_candidates ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.qualified ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Found</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.email_found ?? '—'}</p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">No Email</p>
+                        <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.no_email_found ?? '—'}</p>
+                      </div>
+                    </div>
+                    {selectedRun.funnel_diagnostics.search_passes?.length ? (
+                      <div className="mt-4 space-y-2">
+                        {selectedRun.funnel_diagnostics.search_passes.map((pass, index) => (
+                          <div key={`${selectedRun.id}-pass-${index}`} className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">
+                              Search Pass {index + 1}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-700">{pass.query}</p>
+                            <p className="mt-2 text-xs text-neutral-500">
+                              raw {pass.raw_candidates} · fresh {pass.fresh_added} · duplicates {pass.duplicate_candidates ?? 0}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="rounded-xl border border-neutral-200/70 bg-neutral-50/70 p-4">
                   <p className="text-[11px] tracking-widest uppercase text-neutral-400">Targeting</p>
