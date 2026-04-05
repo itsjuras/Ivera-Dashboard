@@ -178,6 +178,34 @@ function latestRunLabel(campaigns: PortalStats['campaigns']) {
   return `Latest ${timeAgo(campaigns[0].created_at)}`
 }
 
+function getNextScheduledCampaignRun(now = new Date()) {
+  const targetDays = new Set([2, 3, 4]) // Tue-Thu in UTC
+
+  for (let offset = 0; offset < 14; offset += 1) {
+    const candidate = new Date(now)
+    candidate.setUTCDate(now.getUTCDate() + offset)
+    candidate.setUTCHours(17, 0, 0, 0)
+
+    if (!targetDays.has(candidate.getUTCDay())) continue
+    if (candidate.getTime() <= now.getTime()) continue
+
+    return candidate
+  }
+
+  return null
+}
+
+function formatScheduledRun(date: Date | null) {
+  if (!date) return 'Unavailable'
+  return new Intl.DateTimeFormat('en-CA', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
 function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
   const byDay = new Map<
     string,
@@ -565,11 +593,14 @@ export default function SalesDashboard() {
     [recentLeads],
   )
 
+  const nextScheduledRun = useMemo(() => getNextScheduledCampaignRun(), [])
+
   const outreachMetrics = [
     { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
     { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Rolling 7 days' },
     { label: 'Campaign Runs', value: campaigns.length, hint: 'Recorded runs' },
     { label: 'Latest Run', value: latestRunLabel(campaigns), hint: 'Most recent activity' },
+    { label: 'Next Run', value: formatScheduledRun(nextScheduledRun), hint: 'Tue–Thu at 17:00 UTC' },
   ]
   const engagementMetrics = [
     { label: 'Replies', value: overviewSummary.replied, hint: overviewWindowLabel },
