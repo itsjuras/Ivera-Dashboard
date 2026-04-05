@@ -651,7 +651,12 @@ export default function SalesDashboard() {
       })
 
       setCampaignConfig(data.config)
-      setAdminActionMessage(runAfterSave ? 'Campaign changes saved. Starting a new run...' : (data.message || 'Campaign changes saved.'))
+      const savedDescription = data.config.target_description?.trim()
+      setAdminActionMessage(
+        runAfterSave
+          ? `Campaign changes saved. Starting a new run...${savedDescription ? ` New targeting: ${savedDescription}` : ''}`
+          : (data.message || 'Campaign changes saved.') + (savedDescription ? ` New targeting: ${savedDescription}` : ''),
+      )
 
       if (runAfterSave) {
         await handleRunCampaign()
@@ -1147,6 +1152,20 @@ export default function SalesDashboard() {
                 <div className="space-y-3">
                   <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Draft</p>
                   <p className="max-w-3xl text-sm leading-relaxed text-neutral-700">{assessment.summary}</p>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Targeting</p>
+                      <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+                        {assessment.suggestedConfig.target_description || 'No targeting description suggested.'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-4 py-3">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Positioning</p>
+                      <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+                        {assessment.suggestedConfig.product_context || 'No product context suggested.'}
+                      </p>
+                    </div>
+                  </div>
                   {assessment.changeSet.length > 0 && (
                     <div className="space-y-2">
                       {assessment.changeSet.map((change) => (
