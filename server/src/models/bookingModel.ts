@@ -11,10 +11,13 @@ export interface Booking {
   source: string
 }
 
-export async function getAllBookings(): Promise<Booking[]> {
+export async function getAllBookings(customerId: string | null): Promise<Booking[]> {
+  if (!customerId) return []
+
   const { data, error } = await supabase
     .from('bookings')
     .select('id, client_id, booking_time, duration_minutes, amount, status, booking_source')
+    .eq('customer_id', customerId)
     .order('booking_time', { ascending: false })
     .limit(50)
 
@@ -26,6 +29,7 @@ export async function getAllBookings(): Promise<Booking[]> {
     const { data: contacts, error: contactsError } = await supabase
       .from('contacts')
       .select('id, first_name, last_name')
+      .eq('customer_id', customerId)
       .in('id', clientIds)
 
     if (contactsError) throw contactsError

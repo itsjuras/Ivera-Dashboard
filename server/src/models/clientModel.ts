@@ -10,10 +10,13 @@ export interface Client {
   createdAt: string
 }
 
-export async function getAllClients(): Promise<Client[]> {
+export async function getAllClients(customerId: string | null): Promise<Client[]> {
+  if (!customerId) return []
+
   const { data, error } = await supabase
     .from('contacts')
     .select('id, first_name, last_name, email, phone, created_at')
+    .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
     .limit(50)
 

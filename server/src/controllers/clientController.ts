@@ -1,9 +1,13 @@
 import type { Request, Response } from 'express'
+import type { AuthRequest } from '../middleware/requireAuth'
 import { getAllClients } from '../models/clientModel'
+import { resolveReceptionistCustomerId } from '../models/receptionistScopeModel'
 
-export async function getClients(_req: Request, res: Response) {
+export async function getClients(req: Request, res: Response) {
   try {
-    const clients = await getAllClients()
+    const authReq = req as AuthRequest
+    const customerId = await resolveReceptionistCustomerId(authReq.userId)
+    const clients = await getAllClients(customerId)
     res.json(clients)
   } catch (err) {
     console.error('Failed to fetch clients:', err)

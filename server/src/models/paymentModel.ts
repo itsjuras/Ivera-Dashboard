@@ -10,10 +10,13 @@ export interface Payment {
   cardLast4: string
 }
 
-export async function getAllPayments(): Promise<Payment[]> {
+export async function getAllPayments(customerId: string | null): Promise<Payment[]> {
+  if (!customerId) return []
+
   const { data, error } = await supabase
     .from('bookings')
     .select('id, client_id, amount, payment_status, created_at')
+    .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -25,6 +28,7 @@ export async function getAllPayments(): Promise<Payment[]> {
     const { data: contacts, error: contactsError } = await supabase
       .from('contacts')
       .select('id, first_name, last_name')
+      .eq('customer_id', customerId)
       .in('id', clientIds)
 
     if (contactsError) throw contactsError
