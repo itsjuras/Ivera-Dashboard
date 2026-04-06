@@ -344,16 +344,16 @@ function buildRunInsights(
 
   const sources = diagnostics.email_sources
   if (sources) {
-    const sourceEntries: Array<[string, number]> = [
-      ['Exa', sources.exa ?? 0],
-      ['Scraped', sources.scraped ?? 0],
-      ['Pattern', sources.pattern ?? 0],
+    const sourceEntries = [
+      { label: 'Exa', count: sources.exa ?? 0 },
+      { label: 'Scraped', count: sources.scraped ?? 0 },
+      { label: 'Pattern', count: sources.pattern ?? 0 },
     ]
-      .filter(([, count]) => count > 0)
-      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .filter((entry) => entry.count > 0)
+      .sort((a, b) => b.count - a.count)
 
     if (sourceEntries.length > 0) {
-      insights.push(`Most emails came from ${sourceEntries.map(([label, count]) => `${label.toLowerCase()} ${count}`).join(', ')}`)
+      insights.push(`Most emails came from ${sourceEntries.map((entry) => `${entry.label.toLowerCase()} ${entry.count}`).join(', ')}`)
     }
 
     if ((sources.pattern ?? 0) > 0 && (diagnostics.status_breakdown?.bounced ?? 0) > 0) {
@@ -363,17 +363,17 @@ function buildRunInsights(
 
   const branches = diagnostics.follow_up_branches
   if (branches) {
-    const branchEntries: Array<[string, number]> = [
-      ['clicked', branches.clicked ?? 0],
-      ['opened', branches.opened ?? 0],
-      ['cold', branches.cold ?? 0],
-      ['replied later', branches.replied_later ?? 0],
+    const branchEntries = [
+      { label: 'clicked', count: branches.clicked ?? 0 },
+      { label: 'opened', count: branches.opened ?? 0 },
+      { label: 'cold', count: branches.cold ?? 0 },
+      { label: 'replied later', count: branches.replied_later ?? 0 },
     ]
-      .filter(([, count]) => count > 0)
-      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .filter((entry) => entry.count > 0)
+      .sort((a, b) => b.count - a.count)
 
     if (branchEntries.length > 0) {
-      insights.push(`Follow-up branch mix: ${branchEntries.map(([label, count]) => `${label} ${count}`).join(', ')}`)
+      insights.push(`Follow-up branch mix: ${branchEntries.map((entry) => `${entry.label} ${entry.count}`).join(', ')}`)
     }
   }
 
