@@ -39,6 +39,13 @@ interface PortalStats {
     qualify_score: number | null
     created_at: string
   }>
+  leadActivity?: Array<{
+    date: string
+    sent: number
+    replied: number
+    booked: number
+    unsubscribed: number
+  }>
   campaigns: Array<{
     id: string
     product_name: string
@@ -383,6 +390,22 @@ function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
   return Array.from(byDay.values())
 }
 
+function buildLeadActivityFromSeries(series: NonNullable<PortalStats['leadActivity']>, days: number) {
+  if (series.length === 0) return []
+
+  const filtered = days === 0
+    ? series
+    : series.filter((entry) => leadWithinDays(`${entry.date}T12:00:00.000Z`, days))
+
+  return filtered.map((entry) => ({
+    day: new Date(`${entry.date}T00:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    sent: entry.sent,
+    replied: entry.replied,
+    booked: entry.booked,
+    unsubscribed: entry.unsubscribed,
+  }))
+}
+
 function MetricSection({
   title,
   icon: Icon,
@@ -647,6 +670,7 @@ export default function SalesDashboard() {
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
+  const leadActivitySeries = stats?.leadActivity ?? []
   const campaigns = stats?.campaigns ?? []
 
   const overviewLeads = useMemo(
@@ -686,8 +710,12 @@ export default function SalesDashboard() {
   }, [overviewLeads])
 
   const leadActivity = useMemo(
-    () => buildLeadActivity(overviewLeads, overviewDays),
-    [overviewLeads, overviewDays],
+    () => (
+      leadActivitySeries.length > 0
+        ? buildLeadActivityFromSeries(leadActivitySeries, overviewDays)
+        : buildLeadActivity(overviewLeads, overviewDays)
+    ),
+    [leadActivitySeries, overviewLeads, overviewDays],
   )
 
   const parsedExpectedMin = Number(expectedLeadMin)
