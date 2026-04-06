@@ -876,6 +876,22 @@ function parseDateTimeInputValue(value: string) {
   return new Date(value).toISOString()
 }
 
+const LOST_REASONS = [
+  'No budget',
+  'Bad timing',
+  'Chose competitor',
+  'No decision made',
+  'Not a fit',
+  'Went silent',
+  'Other',
+] as const
+
+const STAGE_ORDER = ['new', 'engaged', 'meeting_booked', 'qualified', 'proposal', 'verbal_commit', 'won', 'lost'] as const
+function stageIndex(stage: string) {
+  const idx = STAGE_ORDER.indexOf(stage as typeof STAGE_ORDER[number])
+  return idx === -1 ? 0 : idx
+}
+
 const opportunityStageOptions = [
   'new',
   'engaged',
@@ -968,6 +984,7 @@ export default function SalesDashboard() {
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [pipelineView, setPipelineView] = useState<PipelineView>('board')
   const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('all')
+  const [lostReasonModal, setLostReasonModal] = useState<{ opportunityId: string; reason: string } | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1495,6 +1512,15 @@ export default function SalesDashboard() {
       return aTime - bTime
     })
   const hotQueueTasks = openTasks.filter(isHotQueueTask)
+
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const tomorrowStart = new Date(todayStart.getTime() + 86400000)
+
+  const overdueTasks = openTasks.filter((t) => t.due_at && new Date(t.due_at) < todayStart)
+  const todayTasks = openTasks.filter((t) => t.due_at && new Date(t.due_at) >= todayStart && new Date(t.due_at) < tomorrowStart)
+  const upcomingTasks = openTasks.filter((t) => t.due_at && new Date(t.due_at) >= tomorrowStart)
+  const noDueTasks = openTasks.filter((t) => !t.due_at)
   const myOpenTasks = user?.id ? openTasks.filter((task) => task.owner_user_id === user.id) : []
   const unassignedOpenTasks = openTasks.filter((task) => !task.owner_user_id)
   const pipelineStages = opportunityStageOptions
@@ -1707,7 +1733,7 @@ export default function SalesDashboard() {
 
   async function updateOpportunity(
     opportunityId: string,
-    updates: Partial<Pick<CrmOpportunity, 'stage' | 'next_step' | 'next_step_due_at' | 'priority' | 'qualified_summary' | 'pain_summary' | 'lost_reason'>>,
+    updates: Partial<Pick<CrmOpportunity, 'stage' | 'next_step' | 'next_step_due_at' | 'priority' | 'qualified_summary' | 'pain_summary' | 'lost_reason' | 'amount_estimate' | 'won_at' | 'lost_at'>>,
   ) {
     if (!session?.access_token) return
 
@@ -2243,66 +2269,89 @@ export default function SalesDashboard() {
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">Action Inbox</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Open tasks created from booked meetings, hot replies, and manual next actions.
+                  Open tasks grouped by urgency. Overdue items surface first.
                 </p>
               </div>
-              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
-                {openTasks.length} open
-              </span>
+              <div className="flex items-center gap-2">
+                {overdueTasks.length > 0 ? (
+                  <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-red-700">
+                    {overdueTasks.length} overdue
+                  </span>
+                ) : null}
+                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                  {openTasks.length} open
+                </span>
+              </div>
             </div>
-            <div className="mt-4 space-y-2">
-              {openTasks.length ? openTasks.slice(0, 8).map((task) => (
-                <div key={task.id} className="rounded-xl border border-neutral-100 bg-neutral-50/80 px-4 py-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-neutral-900">{task.title}</p>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${priorityBadgeClass(task.priority)}`}>
-                          {task.priority}
-                        </span>
+            <div className="mt-4 space-y-4">
+              {[
+                { label: 'Overdue', tasks: overdueTasks, borderClass: 'border-red-100', bgClass: 'bg-red-50/60', labelClass: 'text-red-600' },
+                { label: 'Today', tasks: todayTasks, borderClass: 'border-amber-100', bgClass: 'bg-amber-50/60', labelClass: 'text-amber-700' },
+                { label: 'Upcoming', tasks: upcomingTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-500' },
+                { label: 'No due date', tasks: noDueTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-400' },
+              ].filter((bucket) => bucket.tasks.length > 0).map((bucket) => (
+                <div key={bucket.label}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <p className={`text-[11px] uppercase tracking-[0.18em] font-semibold ${bucket.labelClass}`}>{bucket.label}</p>
+                    <span className="text-[10px] text-neutral-400">{bucket.tasks.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {bucket.tasks.slice(0, 6).map((task) => (
+                      <div key={task.id} className={`rounded-xl border ${bucket.borderClass} ${bucket.bgClass} px-4 py-4`}>
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-neutral-900">{task.title}</p>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${priorityBadgeClass(task.priority)}`}>
+                                {task.priority}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {[task.accounts?.name, task.account_contacts?.full_name, task.type].filter(Boolean).join(' · ')}
+                            </p>
+                            {task.description ? (
+                              <p className="mt-2 text-sm text-neutral-600">{task.description}</p>
+                            ) : null}
+                            <p className="mt-2 text-xs text-neutral-500">
+                              {task.due_at ? `Due ${formatRunDate(task.due_at)}` : 'No due date'}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (task.account_id) setSelectedAccountId(task.account_id)
+                              }}
+                              className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+                            >
+                              Open Account
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updateTask(task.id, { due_at: new Date(Date.now() + 24 * 3600000).toISOString() })}
+                              disabled={savingTaskId === task.id}
+                              className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:opacity-50"
+                            >
+                              Snooze 1d
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updateTask(task.id, { status: 'completed' })}
+                              disabled={savingTaskId === task.id}
+                              className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                            >
+                              Complete
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {[task.accounts?.name, task.account_contacts?.full_name, task.type].filter(Boolean).join(' · ')}
-                      </p>
-                      {task.description ? (
-                        <p className="mt-2 text-sm text-neutral-600">{task.description}</p>
-                      ) : null}
-                      <p className="mt-2 text-xs text-neutral-500">
-                        {task.due_at ? `Due ${formatRunDate(task.due_at)}` : 'No due date'}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (task.account_id) setSelectedAccountId(task.account_id)
-                        }}
-                        className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
-                      >
-                        Open Account
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void updateTask(task.id, { due_at: new Date(Date.now() + 24 * 3600000).toISOString() })}
-                        disabled={savingTaskId === task.id}
-                        className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:opacity-50"
-                      >
-                        Snooze 1d
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void updateTask(task.id, { status: 'completed' })}
-                        disabled={savingTaskId === task.id}
-                        className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-50"
-                      >
-                        Complete
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              )) : (
+              ))}
+              {!openTasks.length ? (
                 <p className="text-sm text-neutral-500">No open tasks right now.</p>
-              )}
+              ) : null}
             </div>
           </div>
           {pipelineView === 'board' ? (
@@ -2330,7 +2379,16 @@ export default function SalesDashboard() {
                       </div>
                       <div className="space-y-2">
                         {column.opportunities.length ? (
-                          column.opportunities.map((opportunity) => (
+                          column.opportunities.map((opportunity) => {
+                            const isOverdue = opportunity.next_step_due_at && new Date(opportunity.next_step_due_at) < todayStart
+                            const cardBorder = opportunity.stage === 'won'
+                              ? 'border-emerald-200'
+                              : opportunity.stage === 'lost'
+                                ? 'border-neutral-200 opacity-60'
+                                : isOverdue
+                                  ? 'border-red-200'
+                                  : 'border-neutral-100'
+                            return (
                             <button
                               key={opportunity.id}
                               type="button"
@@ -2338,22 +2396,36 @@ export default function SalesDashboard() {
                                 setSelectedAccountId(opportunity.account_id)
                                 setPipelineView('workspace')
                               }}
-                              className="w-full rounded-xl border border-neutral-100 bg-white px-3 py-3 text-left transition hover:bg-neutral-50"
+                              className={`w-full rounded-xl border ${cardBorder} bg-white px-3 py-3 text-left transition hover:bg-neutral-50`}
                             >
-                              <p className="text-sm font-medium text-neutral-900">
-                                {accountNameById.get(opportunity.account_id) || 'Account'}
-                              </p>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-sm font-medium text-neutral-900">
+                                  {accountNameById.get(opportunity.account_id) || 'Account'}
+                                </p>
+                                {opportunity.amount_estimate != null ? (
+                                  <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                    ${Number(opportunity.amount_estimate).toLocaleString()}
+                                  </span>
+                                ) : null}
+                              </div>
                               <p className="mt-1 text-xs text-neutral-500">
                                 {[opportunity.priority, opportunity.source].filter(Boolean).join(' · ') || 'Opportunity'}
                               </p>
-                              {opportunity.next_step ? (
-                                <p className="mt-2 text-xs leading-relaxed text-neutral-600">{opportunity.next_step}</p>
+                              {opportunity.qualified_summary ? (
+                                <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-blue-600">{opportunity.qualified_summary}</p>
                               ) : null}
-                              <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
+                              {opportunity.next_step ? (
+                                <p className="mt-1.5 text-xs leading-relaxed text-neutral-600">{opportunity.next_step}</p>
+                              ) : null}
+                              {opportunity.lost_reason ? (
+                                <p className="mt-1.5 text-xs text-neutral-400">{opportunity.lost_reason}</p>
+                              ) : null}
+                              <p className={`mt-2 text-[11px] uppercase tracking-[0.16em] ${isOverdue ? 'font-semibold text-red-600' : 'text-neutral-400'}`}>
                                 {opportunity.next_step_due_at ? `Due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date'}
                               </p>
                             </button>
-                          ))
+                          )})
+
                         ) : (
                           <div className="rounded-xl border border-dashed border-neutral-200 bg-white/60 px-3 py-6 text-center text-xs text-neutral-400">
                             No deals
@@ -2472,8 +2544,14 @@ export default function SalesDashboard() {
                       </div>
                     </div>
                     <div className="mt-4 space-y-3">
-                      {selectedAccountDetail.opportunities.length ? selectedAccountDetail.opportunities.map((opportunity) => (
-                        <div key={opportunity.id} className="rounded-xl border border-neutral-100 bg-neutral-50/80 p-4">
+                      {selectedAccountDetail.opportunities.length ? selectedAccountDetail.opportunities.map((opportunity) => {
+                        const si = stageIndex(opportunity.stage)
+                        const isTerminal = opportunity.stage === 'won' || opportunity.stage === 'lost'
+                        const showQualification = si >= stageIndex('qualified') || !!opportunity.qualified_summary || !!opportunity.pain_summary
+                        const showAmount = si >= stageIndex('proposal') || opportunity.amount_estimate != null
+
+                        return (
+                        <div key={opportunity.id} className={`rounded-xl border p-4 ${opportunity.stage === 'won' ? 'border-emerald-200 bg-emerald-50/60' : opportunity.stage === 'lost' ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100 bg-neutral-50/80'}`}>
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
@@ -2481,13 +2559,30 @@ export default function SalesDashboard() {
                                 <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
                                   {opportunity.priority}
                                 </span>
+                                {opportunity.amount_estimate != null ? (
+                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                    ${Number(opportunity.amount_estimate).toLocaleString()}
+                                  </span>
+                                ) : null}
+                                {opportunity.stage === 'won' && opportunity.won_at ? (
+                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                    Won {timeAgo(opportunity.won_at)}
+                                  </span>
+                                ) : null}
+                                {opportunity.stage === 'lost' && opportunity.lost_reason ? (
+                                  <span className="rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                                    {opportunity.lost_reason}
+                                  </span>
+                                ) : null}
                               </div>
                               <p className="mt-1 text-xs text-neutral-500">
                                 {[opportunity.source, opportunity.last_activity_at ? `last activity ${timeAgo(opportunity.last_activity_at)}` : null].filter(Boolean).join(' · ')}
                               </p>
                             </div>
                             <div className="text-xs text-neutral-500">
-                              {opportunity.next_step_due_at ? `Next due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date set'}
+                              {isTerminal
+                                ? (opportunity.stage === 'won' ? 'Closed won' : 'Closed lost')
+                                : opportunity.next_step_due_at ? `Next due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date set'}
                             </div>
                           </div>
 
@@ -2497,7 +2592,14 @@ export default function SalesDashboard() {
                               <select
                                 value={opportunity.stage}
                                 onChange={(event) => {
-                                  void updateOpportunity(opportunity.id, { stage: event.target.value as CrmOpportunity['stage'] })
+                                  const newStage = event.target.value
+                                  if (newStage === 'lost') {
+                                    setLostReasonModal({ opportunityId: opportunity.id, reason: '' })
+                                    return
+                                  }
+                                  const updates: Record<string, string | null> = { stage: newStage }
+                                  if (newStage === 'won') updates.won_at = new Date().toISOString()
+                                  void updateOpportunity(opportunity.id, updates as Parameters<typeof updateOpportunity>[1])
                                 }}
                                 disabled={savingOpportunityId === opportunity.id}
                                 className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
@@ -2521,7 +2623,8 @@ export default function SalesDashboard() {
                                   void updateOpportunity(opportunity.id, { next_step: value || null })
                                 }}
                                 placeholder="Add the next action for this opportunity"
-                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                                disabled={isTerminal}
+                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
                               />
                             </label>
 
@@ -2535,7 +2638,8 @@ export default function SalesDashboard() {
                                   if ((opportunity.next_step_due_at || null) === nextValue) return
                                   void updateOpportunity(opportunity.id, { next_step_due_at: nextValue })
                                 }}
-                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                                disabled={isTerminal}
+                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
                               />
                             </label>
 
@@ -2546,11 +2650,82 @@ export default function SalesDashboard() {
                             </div>
                           </div>
 
-                          {opportunity.pain_summary ? (
-                            <p className="mt-3 text-sm text-neutral-600">{opportunity.pain_summary}</p>
+                          {showAmount ? (
+                            <div className="mt-3">
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Deal Amount ($)</span>
+                                <input
+                                  type="number"
+                                  defaultValue={opportunity.amount_estimate ?? ''}
+                                  onBlur={(event) => {
+                                    const raw = event.target.value.trim()
+                                    const val = raw ? parseFloat(raw) : null
+                                    if (val === opportunity.amount_estimate) return
+                                    void updateOpportunity(opportunity.id, { amount_estimate: val } as Parameters<typeof updateOpportunity>[1])
+                                  }}
+                                  placeholder="Estimated deal value"
+                                  disabled={isTerminal}
+                                  className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+
+                          {showQualification ? (
+                            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Qualification Summary</span>
+                                <textarea
+                                  defaultValue={opportunity.qualified_summary || ''}
+                                  onBlur={(event) => {
+                                    const value = event.target.value.trim()
+                                    if (value === (opportunity.qualified_summary || '')) return
+                                    void updateOpportunity(opportunity.id, { qualified_summary: value || null })
+                                  }}
+                                  placeholder="Why is this a good fit? Budget, authority, need, timeline…"
+                                  rows={3}
+                                  disabled={isTerminal}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                />
+                              </label>
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Pain / Need</span>
+                                <textarea
+                                  defaultValue={opportunity.pain_summary || ''}
+                                  onBlur={(event) => {
+                                    const value = event.target.value.trim()
+                                    if (value === (opportunity.pain_summary || '')) return
+                                    void updateOpportunity(opportunity.id, { pain_summary: value || null })
+                                  }}
+                                  placeholder="What problem are they trying to solve?"
+                                  rows={3}
+                                  disabled={isTerminal}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+
+                          {opportunity.stage === 'lost' && !opportunity.lost_reason ? (
+                            <div className="mt-3">
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lost Reason</span>
+                                <select
+                                  defaultValue=""
+                                  onChange={(event) => {
+                                    if (event.target.value) void updateOpportunity(opportunity.id, { lost_reason: event.target.value })
+                                  }}
+                                  className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                                >
+                                  <option value="" disabled>Select a reason…</option>
+                                  {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                                </select>
+                              </label>
+                            </div>
                           ) : null}
                         </div>
-                      )) : (
+                      )})
+ : (
                         <p className="text-sm text-neutral-500">No opportunities linked to this account yet.</p>
                       )}
                     </div>
@@ -3572,6 +3747,46 @@ export default function SalesDashboard() {
           </div>
         </div>
       )}
+
+      {lostReasonModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
+            <h3 className="text-sm font-semibold text-neutral-900">Mark as Lost</h3>
+            <p className="mt-1 text-xs text-neutral-500">Select a reason so you can spot patterns later.</p>
+            <select
+              value={lostReasonModal.reason}
+              onChange={(event) => setLostReasonModal({ ...lostReasonModal, reason: event.target.value })}
+              className="mt-4 w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+            >
+              <option value="">Select a reason…</option>
+              {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setLostReasonModal(null)}
+                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void updateOpportunity(lostReasonModal.opportunityId, {
+                    stage: 'lost',
+                    lost_at: new Date().toISOString(),
+                    lost_reason: lostReasonModal.reason || null,
+                  })
+                  setLostReasonModal(null)
+                }}
+                className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
+              >
+                Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
