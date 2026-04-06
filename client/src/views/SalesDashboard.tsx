@@ -43,6 +43,12 @@ interface PortalStats {
     open_opportunities: number
     engaged_opportunities: number
     meetings_booked: number
+    total_pipeline: number
+    total_won: number
+    won_opps: number
+    lost_opps: number
+    win_rate: number | null
+    avg_deal_size: number | null
   }
   totals: {
     emailed: number
@@ -251,6 +257,7 @@ interface CrmOpportunity {
   id: string
   account_id: string
   primary_contact_id: string | null
+  owner_user_id: string | null
   stage: string
   amount_estimate: number | null
   priority: string
@@ -263,8 +270,37 @@ interface CrmOpportunity {
   won_at: string | null
   lost_at: string | null
   lost_reason: string | null
+  proposal_sent_at: string | null
+  proposal_status: string
+  closed_amount: number | null
   created_at: string
   updated_at: string
+}
+
+interface ReportingSummary {
+  total_pipeline: number
+  total_won: number
+  total_lost: number
+  win_rate: number | null
+  avg_deal_size: number | null
+  open_opps: number
+  won_opps: number
+}
+
+interface ReportingData {
+  summary: ReportingSummary
+  funnel: Array<{ stage: string; count: number }>
+  by_stage: Record<string, { count: number; amount: number }>
+  by_campaign: Array<{ campaign: string; count: number; amount: number; won: number; lost: number; won_amount: number }>
+  lost_reasons: Record<string, number>
+}
+
+interface CrmComment {
+  id: string
+  opportunity_id: string
+  author_user_id: string | null
+  body: string
+  created_at: string
 }
 
 interface CrmActivity {
@@ -357,7 +393,7 @@ const statusColors: Record<string, string> = {
 type OverviewDays = 0 | 7 | 14 | 30
 type ProspectDays = 0 | 7 | 14 | 30
 type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
-type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'leadQuality' | 'prospects'
+type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'reporting' | 'leadQuality' | 'prospects'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
 type PipelineView = 'board' | 'workspace'
@@ -984,7 +1020,13 @@ export default function SalesDashboard() {
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
   const [pipelineView, setPipelineView] = useState<PipelineView>('board')
   const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('all')
+  const [pipelineOwnerFilter, setPipelineOwnerFilter] = useState<'all' | 'mine' | 'unassigned'>('all')
+  const [taskDueBucket, setTaskDueBucket] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'no_date'>('all')
+  const [reportingData, setReportingData] = useState<ReportingData | null>(null)
   const [lostReasonModal, setLostReasonModal] = useState<{ opportunityId: string; reason: string } | null>(null)
+  const [opportunityComments, setOpportunityComments] = useState<Record<string, CrmComment[]>>({})
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
+  const [postingComment, setPostingComment] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1527,6 +1569,8 @@ export default function SalesDashboard() {
   const filteredPipelineOpportunities = crmOpportunities.filter((opportunity) => {
     if (pipelineStageFilter !== 'all' && opportunity.stage !== pipelineStageFilter) return false
     if (selectedAccountId && pipelineView === 'workspace' && opportunity.account_id !== selectedAccountId) return false
+    if (pipelineOwnerFilter === 'mine' && opportunity.owner_user_id !== user?.id) return false
+    if (pipelineOwnerFilter === 'unassigned' && opportunity.owner_user_id != null) return false
     return true
   })
   const pipelineBoard = pipelineStages.map((stage) => ({
@@ -1583,6 +1627,35 @@ export default function SalesDashboard() {
     if (!session?.access_token) return
     const data = await salesRequest<{ opportunities: CrmOpportunity[] }>(session.access_token, '/opportunities')
     setCrmOpportunities(data.opportunities)
+  }
+
+  async function refreshReportingData() {
+    if (!session?.access_token) return
+    const data = await salesRequest<ReportingData>(session.access_token, '/opportunities/reporting')
+    setReportingData(data)
+  }
+
+  async function loadComments(opportunityId: string) {
+    if (!session?.access_token) return
+    const data = await salesRequest<{ comments: CrmComment[] }>(session.access_token, `/opportunities/${opportunityId}/comments`)
+    setOpportunityComments((prev) => ({ ...prev, [opportunityId]: data.comments }))
+  }
+
+  async function postComment(opportunityId: string) {
+    if (!session?.access_token) return
+    const body = (commentDrafts[opportunityId] || '').trim()
+    if (!body) return
+    setPostingComment(opportunityId)
+    try {
+      await salesRequest<{ ok: boolean }>(session.access_token, `/opportunities/${opportunityId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body, author_user_id: user?.id ?? null }),
+      })
+      setCommentDrafts((prev) => ({ ...prev, [opportunityId]: '' }))
+      await loadComments(opportunityId)
+    } finally {
+      setPostingComment(null)
+    }
   }
 
   async function handleRunCampaign(definitionId: string) {
@@ -1733,7 +1806,7 @@ export default function SalesDashboard() {
 
   async function updateOpportunity(
     opportunityId: string,
-    updates: Partial<Pick<CrmOpportunity, 'stage' | 'next_step' | 'next_step_due_at' | 'priority' | 'qualified_summary' | 'pain_summary' | 'lost_reason' | 'amount_estimate' | 'won_at' | 'lost_at'>>,
+    updates: Partial<Pick<CrmOpportunity, 'stage' | 'next_step' | 'next_step_due_at' | 'priority' | 'owner_user_id' | 'qualified_summary' | 'pain_summary' | 'lost_reason' | 'amount_estimate' | 'won_at' | 'lost_at' | 'proposal_sent_at' | 'proposal_status' | 'closed_amount'>>,
   ) {
     if (!session?.access_token) return
 
@@ -1864,6 +1937,13 @@ export default function SalesDashboard() {
           className={tabButtonClass(activeTab === 'pipeline')}
         >
           Pipeline
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('reporting'); void refreshReportingData() }}
+          className={tabButtonClass(activeTab === 'reporting')}
+        >
+          Revenue
         </button>
         <button
           type="button"
@@ -2163,6 +2243,18 @@ export default function SalesDashboard() {
                     </button>
                   ))}
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {([['all', 'All Owners'], ['mine', 'Mine'], ['unassigned', 'Unassigned']] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPipelineOwnerFilter(value)}
+                      className={tabButtonClass(pipelineOwnerFilter === value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -2265,38 +2357,54 @@ export default function SalesDashboard() {
             </div>
           </div>
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">Action Inbox</h3>
                 <p className="mt-1 text-xs text-neutral-500">
                   Open tasks grouped by urgency. Overdue items surface first.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                {overdueTasks.length > 0 ? (
-                  <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-red-700">
-                    {overdueTasks.length} overdue
+              <div className="flex flex-col gap-2 lg:items-end">
+                <div className="flex flex-wrap items-center gap-2">
+                  {overdueTasks.length > 0 ? (
+                    <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-red-700">
+                      {overdueTasks.length} overdue
+                    </span>
+                  ) : null}
+                  <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                    {openTasks.length} open
                   </span>
-                ) : null}
-                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
-                  {openTasks.length} open
-                </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {([['all', 'All'], ['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['no_date', 'No date']] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTaskDueBucket(value)}
+                      className={tabButtonClass(taskDueBucket === value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="mt-4 space-y-4">
               {[
-                { label: 'Overdue', tasks: overdueTasks, borderClass: 'border-red-100', bgClass: 'bg-red-50/60', labelClass: 'text-red-600' },
-                { label: 'Today', tasks: todayTasks, borderClass: 'border-amber-100', bgClass: 'bg-amber-50/60', labelClass: 'text-amber-700' },
-                { label: 'Upcoming', tasks: upcomingTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-500' },
-                { label: 'No due date', tasks: noDueTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-400' },
-              ].filter((bucket) => bucket.tasks.length > 0).map((bucket) => (
+                { key: 'overdue' as const, label: 'Overdue', tasks: overdueTasks, borderClass: 'border-red-100', bgClass: 'bg-red-50/60', labelClass: 'text-red-600' },
+                { key: 'today' as const, label: 'Today', tasks: todayTasks, borderClass: 'border-amber-100', bgClass: 'bg-amber-50/60', labelClass: 'text-amber-700' },
+                { key: 'upcoming' as const, label: 'Upcoming', tasks: upcomingTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-500' },
+                { key: 'no_date' as const, label: 'No due date', tasks: noDueTasks, borderClass: 'border-neutral-100', bgClass: 'bg-neutral-50/80', labelClass: 'text-neutral-400' },
+              ].filter((bucket) => (taskDueBucket === 'all' || taskDueBucket === bucket.key) && bucket.tasks.length > 0).map((bucket) => (
                 <div key={bucket.label}>
                   <div className="mb-2 flex items-center gap-2">
                     <p className={`text-[11px] uppercase tracking-[0.18em] font-semibold ${bucket.labelClass}`}>{bucket.label}</p>
                     <span className="text-[10px] text-neutral-400">{bucket.tasks.length}</span>
                   </div>
                   <div className="space-y-2">
-                    {bucket.tasks.slice(0, 6).map((task) => (
+                    {bucket.tasks.slice(0, 8).map((task) => {
+                      const isMine = Boolean(user?.id && task.owner_user_id === user.id)
+                      return (
                       <div key={task.id} className={`rounded-xl border ${bucket.borderClass} ${bucket.bgClass} px-4 py-4`}>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0">
@@ -2305,6 +2413,11 @@ export default function SalesDashboard() {
                               <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${priorityBadgeClass(task.priority)}`}>
                                 {task.priority}
                               </span>
+                              {isMine ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Mine</span>
+                              ) : task.owner_user_id ? (
+                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">Assigned</span>
+                              ) : null}
                             </div>
                             <p className="mt-1 text-xs text-neutral-500">
                               {[task.accounts?.name, task.account_contacts?.full_name, task.type].filter(Boolean).join(' · ')}
@@ -2319,13 +2432,21 @@ export default function SalesDashboard() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                if (task.account_id) setSelectedAccountId(task.account_id)
-                              }}
+                              onClick={() => { if (task.account_id) setSelectedAccountId(task.account_id) }}
                               className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
                             >
                               Open Account
                             </button>
+                            {user?.id ? (
+                              <button
+                                type="button"
+                                onClick={() => void assignTask(task.id, isMine ? null : user.id)}
+                                disabled={savingTaskId === task.id}
+                                className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700 disabled:opacity-50"
+                              >
+                                {isMine ? 'Unassign' : 'Assign to me'}
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => void updateTask(task.id, { due_at: new Date(Date.now() + 24 * 3600000).toISOString() })}
@@ -2345,7 +2466,8 @@ export default function SalesDashboard() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ))}
@@ -2411,6 +2533,13 @@ export default function SalesDashboard() {
                               <p className="mt-1 text-xs text-neutral-500">
                                 {[opportunity.priority, opportunity.source].filter(Boolean).join(' · ') || 'Opportunity'}
                               </p>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {opportunity.owner_user_id === user?.id ? (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Mine</span>
+                                ) : !opportunity.owner_user_id ? (
+                                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-amber-600">Unowned</span>
+                                ) : null}
+                              </div>
                               {opportunity.qualified_summary ? (
                                 <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-blue-600">{opportunity.qualified_summary}</p>
                               ) : null}
@@ -2549,6 +2678,7 @@ export default function SalesDashboard() {
                         const isTerminal = opportunity.stage === 'won' || opportunity.stage === 'lost'
                         const showQualification = si >= stageIndex('qualified') || !!opportunity.qualified_summary || !!opportunity.pain_summary
                         const showAmount = si >= stageIndex('proposal') || opportunity.amount_estimate != null
+                        const showProposal = si >= stageIndex('proposal') || !!opportunity.proposal_sent_at || opportunity.proposal_status !== 'none'
 
                         return (
                         <div key={opportunity.id} className={`rounded-xl border p-4 ${opportunity.stage === 'won' ? 'border-emerald-200 bg-emerald-50/60' : opportunity.stage === 'lost' ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100 bg-neutral-50/80'}`}>
@@ -2574,6 +2704,16 @@ export default function SalesDashboard() {
                                     {opportunity.lost_reason}
                                   </span>
                                 ) : null}
+                                {/* Ownership state */}
+                                {opportunity.owner_user_id ? (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                    Human active
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-violet-600">
+                                    AI active
+                                  </span>
+                                )}
                               </div>
                               <p className="mt-1 text-xs text-neutral-500">
                                 {[opportunity.source, opportunity.last_activity_at ? `last activity ${timeAgo(opportunity.last_activity_at)}` : null].filter(Boolean).join(' · ')}
@@ -2643,10 +2783,22 @@ export default function SalesDashboard() {
                               />
                             </label>
 
-                            <div className="flex items-end">
+                            <div className="flex flex-col gap-2 items-end justify-end">
                               <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs text-neutral-500">
                                 {savingOpportunityId === opportunity.id ? 'Saving…' : 'Auto-saves on change'}
                               </div>
+                              {user?.id && !isTerminal ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void updateOpportunity(opportunity.id, {
+                                    owner_user_id: opportunity.owner_user_id ? null : user.id,
+                                  } as Parameters<typeof updateOpportunity>[1])}
+                                  disabled={savingOpportunityId === opportunity.id}
+                                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:opacity-50 ${opportunity.owner_user_id ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}
+                                >
+                                  {opportunity.owner_user_id ? 'Hand to AI' : 'Take over'}
+                                </button>
+                              ) : null}
                             </div>
                           </div>
 
@@ -2666,6 +2818,56 @@ export default function SalesDashboard() {
                                   placeholder="Estimated deal value"
                                   disabled={isTerminal}
                                   className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+
+                          {showProposal ? (
+                            <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Status</span>
+                                <select
+                                  value={opportunity.proposal_status || 'none'}
+                                  onChange={(event) => {
+                                    void updateOpportunity(opportunity.id, { proposal_status: event.target.value } as Parameters<typeof updateOpportunity>[1])
+                                  }}
+                                  disabled={isTerminal}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                >
+                                  {['none', 'draft', 'sent', 'viewed', 'accepted', 'declined'].map((s) => (
+                                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Sent</span>
+                                <input
+                                  type="datetime-local"
+                                  defaultValue={formatDateTimeInputValue(opportunity.proposal_sent_at)}
+                                  onBlur={(event) => {
+                                    const next = parseDateTimeInputValue(event.target.value)
+                                    if ((opportunity.proposal_sent_at || null) === next) return
+                                    void updateOpportunity(opportunity.id, { proposal_sent_at: next } as Parameters<typeof updateOpportunity>[1])
+                                  }}
+                                  disabled={isTerminal}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                />
+                              </label>
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Closed Amount ($)</span>
+                                <input
+                                  type="number"
+                                  defaultValue={opportunity.closed_amount ?? ''}
+                                  onBlur={(event) => {
+                                    const raw = event.target.value.trim()
+                                    const val = raw ? parseFloat(raw) : null
+                                    if (val === opportunity.closed_amount) return
+                                    void updateOpportunity(opportunity.id, { closed_amount: val } as Parameters<typeof updateOpportunity>[1])
+                                  }}
+                                  placeholder="Final closed value"
+                                  disabled={!isTerminal}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
                                 />
                               </label>
                             </div>
@@ -2723,6 +2925,56 @@ export default function SalesDashboard() {
                               </label>
                             </div>
                           ) : null}
+
+                          {/* Internal notes */}
+                          <div className="mt-4 border-t border-neutral-100 pt-4">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Internal Notes</p>
+                              {!opportunityComments[opportunity.id] ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void loadComments(opportunity.id)}
+                                  className="text-[11px] text-neutral-400 underline underline-offset-2 hover:text-neutral-600"
+                                >
+                                  Load notes
+                                </button>
+                              ) : null}
+                            </div>
+
+                            {opportunityComments[opportunity.id] ? (
+                              <div className="mt-2 space-y-2">
+                                {opportunityComments[opportunity.id].length ? (
+                                  opportunityComments[opportunity.id].map((comment) => (
+                                    <div key={comment.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+                                      <p className="text-sm text-neutral-800">{comment.body}</p>
+                                      <p className="mt-1 text-[11px] text-neutral-400">{timeAgo(comment.created_at)}</p>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-sm text-neutral-400">No notes yet.</p>
+                                )}
+                                <div className="flex gap-2 pt-1">
+                                  <input
+                                    type="text"
+                                    value={commentDrafts[opportunity.id] || ''}
+                                    onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [opportunity.id]: e.target.value }))}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void postComment(opportunity.id) } }}
+                                    placeholder="Add a note…"
+                                    disabled={postingComment === opportunity.id}
+                                    className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void postComment(opportunity.id)}
+                                    disabled={postingComment === opportunity.id || !(commentDrafts[opportunity.id] || '').trim()}
+                                    className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-40"
+                                  >
+                                    {postingComment === opportunity.id ? '…' : 'Post'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       )})
  : (
@@ -2738,6 +2990,131 @@ export default function SalesDashboard() {
               )}
             </div>
           </div>
+        </div>
+      ) : activeTab === 'reporting' ? (
+        <div className="space-y-4">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { label: 'Open Pipeline', value: reportingData ? `$${Number(reportingData.summary.total_pipeline).toLocaleString()}` : (crm.total_pipeline ? `$${Number(crm.total_pipeline).toLocaleString()}` : '—'), hint: 'Estimated value of open deals' },
+              { label: 'Revenue Won', value: reportingData ? `$${Number(reportingData.summary.total_won).toLocaleString()}` : (crm.total_won ? `$${Number(crm.total_won).toLocaleString()}` : '—'), hint: 'Closed-won total' },
+              { label: 'Win Rate', value: reportingData?.summary.win_rate != null ? `${reportingData.summary.win_rate}%` : (crm.win_rate != null ? `${crm.win_rate}%` : '—'), hint: 'Won ÷ (won + lost)' },
+              { label: 'Avg Deal Size', value: reportingData?.summary.avg_deal_size ? `$${Number(reportingData.summary.avg_deal_size).toLocaleString()}` : (crm.avg_deal_size ? `$${Number(crm.avg_deal_size).toLocaleString()}` : '—'), hint: 'Among closed-won deals' },
+            ].map((card) => (
+              <div key={card.label} className="rounded-xl border border-neutral-200/60 bg-white/70 px-4 py-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">{card.label}</p>
+                <p className="mt-1 text-2xl font-semibold text-neutral-900">{card.value}</p>
+                <p className="mt-1 text-[11px] text-neutral-500">{card.hint}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Conversion funnel */}
+          {reportingData?.funnel.length ? (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Conversion Funnel</h3>
+              <p className="mt-1 text-xs text-neutral-500">How many opportunities reached each stage (cumulative — includes all that passed through).</p>
+              <div className="mt-4 flex items-end gap-1 overflow-x-auto pb-2">
+                {(() => {
+                  const max = reportingData.funnel[0]?.count || 1
+                  return reportingData.funnel.map((row, i) => {
+                    const prev = i > 0 ? reportingData.funnel[i - 1].count : row.count
+                    const pct = Math.round((row.count / max) * 100)
+                    const dropPct = prev > 0 ? Math.round(((prev - row.count) / prev) * 100) : 0
+                    return (
+                      <div key={row.stage} className="flex min-w-[80px] flex-1 flex-col items-center gap-1">
+                        <span className="text-[10px] font-semibold text-neutral-700">{row.count}</span>
+                        {i > 0 && dropPct > 0 ? (
+                          <span className="text-[9px] text-red-400">-{dropPct}%</span>
+                        ) : <span className="text-[9px] text-transparent">·</span>}
+                        <div className="w-full rounded-t-lg bg-neutral-100" style={{ height: '80px' }}>
+                          <div
+                            className="w-full rounded-t-lg bg-neutral-800 transition-all"
+                            style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }}
+                          />
+                        </div>
+                        <span className="text-center text-[10px] uppercase tracking-[0.12em] text-neutral-400">{formatStageLabel(row.stage)}</span>
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {/* Pipeline by stage */}
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Pipeline by Stage</h3>
+              <p className="mt-1 text-xs text-neutral-500">Deal count and estimated value at each stage.</p>
+              <div className="mt-4 space-y-2">
+                {reportingData
+                  ? STAGE_ORDER.filter((s) => reportingData.by_stage[s]).map((stage) => {
+                      const row = reportingData.by_stage[stage]
+                      return (
+                        <div key={stage} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-white/80 px-3 py-2.5">
+                          <span className="text-sm text-neutral-700">{formatStageLabel(stage)}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">{row.count} deals</span>
+                            {row.amount > 0 ? (
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                ${Number(row.amount).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      )
+                    })
+                  : <p className="text-sm text-neutral-400">Click Revenue tab to load data.</p>
+                }
+              </div>
+            </div>
+
+            {/* Pipeline by campaign */}
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Pipeline by Campaign</h3>
+              <p className="mt-1 text-xs text-neutral-500">Sourced pipeline, wins, and losses broken down by campaign.</p>
+              <div className="mt-4 space-y-2">
+                {reportingData?.by_campaign.length
+                  ? reportingData.by_campaign.sort((a, b) => b.won_amount - a.won_amount).map((row) => (
+                      <div key={row.campaign} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-medium text-neutral-900">{row.campaign}</p>
+                          {row.won_amount > 0 ? (
+                            <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                              ${Number(row.won_amount).toLocaleString()} won
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {row.count} deals · {row.won} won · {row.lost} lost
+                          {row.amount > 0 ? ` · $${Number(row.amount).toLocaleString()} pipeline` : ''}
+                        </p>
+                      </div>
+                    ))
+                  : <p className="text-sm text-neutral-400">{reportingData ? 'No campaign data yet.' : 'Click Revenue tab to load data.'}</p>
+                }
+              </div>
+            </div>
+          </div>
+
+          {/* Lost reasons */}
+          {reportingData && Object.keys(reportingData.lost_reasons).length > 0 ? (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Loss Analysis</h3>
+              <p className="mt-1 text-xs text-neutral-500">Why deals are being lost.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Object.entries(reportingData.lost_reasons)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([reason, count]) => (
+                    <div key={reason} className="rounded-lg border border-neutral-200 bg-white px-3 py-2">
+                      <p className="text-sm font-medium text-neutral-900">{reason}</p>
+                      <p className="mt-0.5 text-xs text-neutral-500">{count} {count === 1 ? 'deal' : 'deals'}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : activeTab === 'leadQuality' ? (
         <div className="space-y-4">
