@@ -509,6 +509,7 @@ function timelineTypeLabel(type: string) {
 async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${SALES_API}${path}`, {
     ...options,
+    cache: 'no-store',
     headers: {
       Authorization: `Bearer ${token}`,
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -577,6 +578,7 @@ export default function SalesDashboard() {
     setStats(null)
 
     fetch(`${SALES_API}/portal/stats`, {
+      cache: 'no-store',
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((r) => {
@@ -713,6 +715,25 @@ export default function SalesDashboard() {
     () => (pendingRun ? buildLiveRunProgress(matchingPendingCampaign, pendingRun.startedAt, pendingRun.requestedLeadCount, runTimerNow) : null),
     [matchingPendingCampaign, pendingRun, runTimerNow],
   )
+  const activeCampaign = useMemo(
+    () => campaigns.find((campaign) => campaign.status === 'active') ?? null,
+    [campaigns],
+  )
+  const activeCampaignProgress = useMemo(
+    () => (
+      activeCampaign
+        ? buildLiveRunProgress(
+          activeCampaign,
+          new Date(activeCampaign.created_at).getTime(),
+          activeCampaign.funnel_diagnostics?.requested_leads ?? null,
+          runTimerNow,
+        )
+        : null
+    ),
+    [activeCampaign, runTimerNow],
+  )
+  const liveCampaign = matchingPendingCampaign ?? activeCampaign
+  const liveCampaignProgress = pendingRunProgress ?? activeCampaignProgress
   const hasActiveCampaign = campaigns.some((campaign) => campaign.status === 'active')
   const runStartDisabled = runningCampaign || savingDescription || hasActiveCampaign
   const latestCampaignRuns = useMemo(
@@ -737,22 +758,22 @@ export default function SalesDashboard() {
         ],
       }))
 
-      if (!pendingRun || !pendingRunProgress) return rows
+      if (!liveCampaign || !liveCampaignProgress) return rows
 
       return [
         {
-          id: 'pending-run',
-          title: pendingRun.title,
-          meta: pendingRunProgress.summary,
-          badge: pendingRunProgress.badge,
-          detail: buildFunnelSummary(matchingPendingCampaign?.funnel_diagnostics) || undefined,
-          metrics: pendingRunProgress.metrics,
+          id: `live-${liveCampaign.id}`,
+          title: pendingRun?.title || liveCampaign.product_name || 'Campaign run',
+          meta: liveCampaignProgress.summary,
+          badge: liveCampaignProgress.badge,
+          detail: buildFunnelSummary(liveCampaign.funnel_diagnostics) || undefined,
+          metrics: liveCampaignProgress.metrics,
           interactive: false,
         },
         ...rows,
       ]
     },
-    [campaigns, matchingPendingCampaign, pendingRun, pendingRunProgress],
+    [campaigns, liveCampaign, liveCampaignProgress, pendingRun],
   )
 
   const selectedRun = useMemo(
@@ -807,7 +828,7 @@ export default function SalesDashboard() {
   const nextScheduledRun = useMemo(() => getNextScheduledCampaignRun(), [])
 
   useEffect(() => {
-    if (!pendingRun || !session?.access_token) return
+    if (!liveCampaignProgress || !session?.access_token) return
 
     const tickTimer = window.setInterval(() => {
       setRunTimerNow(Date.now())
@@ -821,7 +842,32 @@ export default function SalesDashboard() {
       window.clearInterval(tickTimer)
       window.clearInterval(pollTimer)
     }
-  }, [pendingRun, session?.access_token])
+  }, [liveCampaignProgress, session?.access_token])
+
+  useEffect(() => {
+    if (!session?.access_token) return
+
+    function handleResume() {
+      setRunTimerNow(Date.now())
+      void refreshStats()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        handleResume()
+      }
+    }
+
+    window.addEventListener('focus', handleResume)
+    window.addEventListener('online', handleResume)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleResume)
+      window.removeEventListener('online', handleResume)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [session?.access_token])
 
   useEffect(() => {
     if (!pendingRun) return
@@ -1445,36 +1491,38 @@ export default function SalesDashboard() {
                   </div>
                 ) : null}
 
-                {pendingRun && pendingRunProgress ? (
+                {liveCampaign && liveCampaignProgress ? (
                   <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-[11px] tracking-widest uppercase text-neutral-400">
-                          {pendingRunProgress.isComplete ? 'Run Complete' : 'Campaign In Progress'}
+                          {liveCampaignProgress.isComplete ? 'Run Complete' : 'Campaign In Progress'}
                         </p>
-                        <h4 className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun.title}</h4>
-                        <p className="mt-1 text-xs text-neutral-500">{pendingRunProgress.summary}</p>
+                        <h4 className="mt-1 text-sm font-semibold text-neutral-900">
+                          {pendingRun?.title || liveCampaign.product_name || 'Campaign run'}
+                        </h4>
+                        <p className="mt-1 text-xs text-neutral-500">{liveCampaignProgress.summary}</p>
                       </div>
                       <span className={`inline-flex self-start rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${
-                        pendingRunProgress.isComplete
+                        liveCampaignProgress.isComplete
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                           : 'border-neutral-200 bg-white text-neutral-500'
                       }`}>
-                        {pendingRunProgress.badge}
+                        {liveCampaignProgress.badge}
                       </span>
                     </div>
 
                     <div className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-200">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
-                          pendingRunProgress.isComplete ? 'bg-emerald-500' : 'bg-neutral-900'
+                          liveCampaignProgress.isComplete ? 'bg-emerald-500' : 'bg-neutral-900'
                         }`}
-                        style={{ width: `${pendingRunProgress.progressPercent}%` }}
+                        style={{ width: `${liveCampaignProgress.progressPercent}%` }}
                       />
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
-                      {pendingRunProgress.steps.map((step) => (
+                      {liveCampaignProgress.steps.map((step) => (
                         <div
                           key={step.key}
                           className={`rounded-lg border px-3 py-3 ${
@@ -1500,7 +1548,7 @@ export default function SalesDashboard() {
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
-                      {pendingRunProgress.metrics.map((metric) => (
+                      {liveCampaignProgress.metrics.map((metric) => (
                         <div key={metric.label} className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-2.5">
                           <p className="text-[11px] tracking-widest uppercase text-neutral-400">{metric.label}</p>
                           <p className="mt-1 text-lg font-semibold text-neutral-900">{metric.value}</p>

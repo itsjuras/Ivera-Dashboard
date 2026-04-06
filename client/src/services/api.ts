@@ -10,6 +10,7 @@ async function getToken(): Promise<string | null> {
 async function authGet<T>(path: string): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_BASE}${path}`, {
+    cache: 'no-store',
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) {
@@ -29,6 +30,7 @@ async function authPost<T>(path: string, body?: unknown): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
@@ -52,6 +54,7 @@ async function authPatch<T>(path: string, body: unknown): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'PATCH',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
@@ -75,6 +78,7 @@ async function authDelete<T>(path: string): Promise<T> {
   const token = await getToken()
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'DELETE',
+    cache: 'no-store',
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) {

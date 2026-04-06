@@ -28,6 +28,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function refreshSession() {
+    const { data, error } = await supabase.auth.refreshSession()
+    if (error) return
+
+    const nextSession = data.session ?? null
+    setSession(nextSession)
+    setUser(nextSession?.user ?? null)
+
+    if (nextSession) {
+      await loadProfile()
+    } else {
+      setRole(null)
+      setProducts([])
+      setProfileError(null)
+    }
+  }
+
   useEffect(() => {
     // Use onAuthStateChange exclusively — it fires INITIAL_SESSION on mount
     // so we don't need a separate getSession() call (which causes lock contention).
@@ -50,6 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    async function revalidateAuthState() {
+      if (document.visibilityState === 'hidden') return
+      await refreshSession()
+    }
+
+    function handleVisibilityChange() {
+      void revalidateAuthState()
+    }
+
+    function handleFocus() {
+      void revalidateAuthState()
+    }
+
+    function handleOnline() {
+      void revalidateAuthState()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [])
 
   async function signIn(email: string, password: string) {
@@ -93,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, products, profileError, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, loading, role, products, profileError, signIn, signUp, signOut, refreshProfile, refreshSession }}>
       {children}
     </AuthContext.Provider>
   )

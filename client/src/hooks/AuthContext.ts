@@ -13,6 +13,7 @@ export interface AuthState {
   signUp: (email: string, password: string, metadata: Record<string, string>) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  refreshSession: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthState | undefined>(undefined)
