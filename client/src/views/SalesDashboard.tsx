@@ -344,7 +344,7 @@ function buildRunInsights(
 
   const sources = diagnostics.email_sources
   if (sources) {
-    const sourceEntries = [
+    const sourceEntries: Array<[string, number]> = [
       ['Exa', sources.exa ?? 0],
       ['Scraped', sources.scraped ?? 0],
       ['Pattern', sources.pattern ?? 0],
@@ -363,7 +363,7 @@ function buildRunInsights(
 
   const branches = diagnostics.follow_up_branches
   if (branches) {
-    const branchEntries = [
+    const branchEntries: Array<[string, number]> = [
       ['clicked', branches.clicked ?? 0],
       ['opened', branches.opened ?? 0],
       ['cold', branches.cold ?? 0],
