@@ -278,6 +278,38 @@ interface CrmActivity {
   occurred_at: string
 }
 
+interface CrmTask {
+  id: string
+  title: string
+  description: string | null
+  type: string
+  status: string
+  priority: string
+  due_at: string | null
+  completed_at: string | null
+  account_id: string | null
+  opportunity_id: string | null
+  contact_id: string | null
+  lead_id: string | null
+  accounts?: {
+    id: string
+    name: string
+    domain: string | null
+    lifecycle_stage: string
+  } | null
+  opportunities?: {
+    id: string
+    stage: string
+    next_step: string | null
+    next_step_due_at: string | null
+  } | null
+  account_contacts?: {
+    id: string
+    full_name: string | null
+    email: string | null
+  } | null
+}
+
 interface CrmAccountDetail {
   account: CrmAccountSummary
   contacts: CrmContact[]
@@ -816,6 +848,12 @@ function timelineTypeLabel(type: string) {
   return labels[type] || 'Activity'
 }
 
+function priorityBadgeClass(priority: string) {
+  if (priority === 'high') return 'border border-red-200 bg-red-50 text-red-700'
+  if (priority === 'low') return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+  return 'border border-neutral-200 bg-white text-neutral-500'
+}
+
 function formatStageLabel(stage: string) {
   return stage.replace(/_/g, ' ')
 }
@@ -916,9 +954,11 @@ export default function SalesDashboard() {
   const [crmAccounts, setCrmAccounts] = useState<CrmAccountSummary[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [selectedAccountDetail, setSelectedAccountDetail] = useState<CrmAccountDetail | null>(null)
+  const [crmTasks, setCrmTasks] = useState<CrmTask[]>([])
   const [crmLoading, setCrmLoading] = useState(false)
   const [crmError, setCrmError] = useState<string | null>(null)
   const [savingOpportunityId, setSavingOpportunityId] = useState<string | null>(null)
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -986,6 +1026,7 @@ export default function SalesDashboard() {
       setCrmAccounts([])
       setSelectedAccountId(null)
       setSelectedAccountDetail(null)
+      setCrmTasks([])
       return
     }
 
@@ -1003,6 +1044,24 @@ export default function SalesDashboard() {
       })
       .finally(() => {
         if (!cancelled) setCrmLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!session?.access_token) return
+
+    let cancelled = false
+
+    salesRequest<{ tasks: CrmTask[] }>(session.access_token, '/tasks?status=open')
+      .then((data) => {
+        if (!cancelled) setCrmTasks(data.tasks)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setCrmError(err.message)
       })
 
     return () => {
@@ -1312,6 +1371,7 @@ export default function SalesDashboard() {
       void refreshStats()
       void refreshCampaignDefinitions()
       void refreshCrmAccounts()
+      void refreshCrmTasks()
       void refreshSelectedAccountDetail()
     }, 10000)
 
@@ -1329,6 +1389,7 @@ export default function SalesDashboard() {
       void refreshStats()
       void refreshCampaignDefinitions()
       void refreshCrmAccounts()
+      void refreshCrmTasks()
       void refreshSelectedAccountDetail()
     }
 
@@ -1406,6 +1467,13 @@ export default function SalesDashboard() {
     { label: 'Booked', value: overviewSummary.booked, hint: 'Booked prospects in window' },
   ]
   const selectedAccount = selectedAccountDetail?.account ?? null
+  const openTasks = crmTasks
+    .filter((task) => task.status === 'open')
+    .sort((a, b) => {
+      const aTime = a.due_at ? new Date(a.due_at).getTime() : Number.MAX_SAFE_INTEGER
+      const bTime = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER
+      return aTime - bTime
+    })
   const crmAccountRows = crmAccounts.map((account) => ({
     id: account.id,
     title: account.name,
@@ -1444,6 +1512,12 @@ export default function SalesDashboard() {
     if (!session?.access_token || !accountId) return
     const data = await salesRequest<CrmAccountDetail>(session.access_token, `/accounts/${accountId}`)
     setSelectedAccountDetail(data)
+  }
+
+  async function refreshCrmTasks() {
+    if (!session?.access_token) return
+    const data = await salesRequest<{ tasks: CrmTask[] }>(session.access_token, '/tasks?status=open')
+    setCrmTasks(data.tasks)
   }
 
   async function handleRunCampaign(definitionId: string) {
@@ -1611,6 +1685,25 @@ export default function SalesDashboard() {
       setCrmError(err instanceof Error ? err.message : 'Failed to update opportunity.')
     } finally {
       setSavingOpportunityId(null)
+    }
+  }
+
+  async function updateTask(taskId: string, updates: { status?: string; due_at?: string | null }) {
+    if (!session?.access_token) return
+
+    setSavingTaskId(taskId)
+    setCrmError(null)
+
+    try {
+      await salesRequest<{ task: CrmTask }>(session.access_token, `/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await Promise.all([refreshCrmTasks(), refreshCrmAccounts(), refreshSelectedAccountDetail()])
+    } catch (err) {
+      setCrmError(err instanceof Error ? err.message : 'Failed to update task.')
+    } finally {
+      setSavingTaskId(null)
     }
   }
 
@@ -1942,6 +2035,73 @@ export default function SalesDashboard() {
       ) : activeTab === 'pipeline' ? (
         <div className="space-y-4">
           <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Action Inbox</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Open tasks created from booked meetings, hot replies, and manual next actions.
+                </p>
+              </div>
+              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                {openTasks.length} open
+              </span>
+            </div>
+            <div className="mt-4 space-y-2">
+              {openTasks.length ? openTasks.slice(0, 8).map((task) => (
+                <div key={task.id} className="rounded-xl border border-neutral-100 bg-neutral-50/80 px-4 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-neutral-900">{task.title}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${priorityBadgeClass(task.priority)}`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {[task.accounts?.name, task.account_contacts?.full_name, task.type].filter(Boolean).join(' · ')}
+                      </p>
+                      {task.description ? (
+                        <p className="mt-2 text-sm text-neutral-600">{task.description}</p>
+                      ) : null}
+                      <p className="mt-2 text-xs text-neutral-500">
+                        {task.due_at ? `Due ${formatRunDate(task.due_at)}` : 'No due date'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (task.account_id) setSelectedAccountId(task.account_id)
+                        }}
+                        className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+                      >
+                        Open Account
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void updateTask(task.id, { due_at: new Date(Date.now() + 24 * 3600000).toISOString() })}
+                        disabled={savingTaskId === task.id}
+                        className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:opacity-50"
+                      >
+                        Snooze 1d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void updateTask(task.id, { status: 'completed' })}
+                        disabled={savingTaskId === task.id}
+                        className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                      >
+                        Complete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )) : (
+                <p className="text-sm text-neutral-500">No open tasks right now.</p>
+              )}
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
             <ListCard
               title="Accounts"
