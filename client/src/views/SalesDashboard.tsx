@@ -59,6 +59,15 @@ interface PortalStats {
     bounced: number
     unsubscribed: number
   }>
+  campaignSourcePerformance?: Array<{
+    campaign_definition_id: string
+    source: 'exa' | 'scraped' | 'pattern' | 'unknown'
+    leads: number
+    replied: number
+    booked: number
+    bounced: number
+    unsubscribed: number
+  }>
   campaigns: Array<{
     id: string
     product_name: string
@@ -181,6 +190,14 @@ interface CampaignAnalytics {
     scraped: number
     pattern: number
   }
+  sourcePerformance: Array<{
+    source: 'exa' | 'scraped' | 'pattern' | 'unknown'
+    leads: number
+    replied: number
+    booked: number
+    bounced: number
+    unsubscribed: number
+  }>
   latestRun: PortalStats['campaigns'][number] | null
   healthScore: number
 }
@@ -259,9 +276,17 @@ function branchLabel(branch: string) {
   return branch.charAt(0).toUpperCase() + branch.slice(1)
 }
 
+function sourceLabel(source: string) {
+  if (source === 'exa') return 'Exa'
+  if (source === 'scraped') return 'Scraped'
+  if (source === 'pattern') return 'Pattern'
+  return 'Unknown'
+}
+
 function buildCampaignAnalytics(
   definition: CampaignDefinition,
   runs: PortalStats['campaigns'],
+  sourcePerformanceRows: NonNullable<PortalStats['campaignSourcePerformance']>,
 ): CampaignAnalytics | null {
   const scopedRuns = runs
     .filter((run) => run.campaign_definition_id === definition.id)
@@ -327,6 +352,9 @@ function buildCampaignAnalytics(
     unsubscribed: totals.unsubscribed,
     branchMix: totals.branchMix,
     sourceMix: totals.sourceMix,
+    sourcePerformance: sourcePerformanceRows
+      .filter((row) => row.campaign_definition_id === definition.id)
+      .sort((a, b) => b.leads - a.leads),
     latestRun: scopedRuns[0] ?? null,
     healthScore,
   }
@@ -952,17 +980,18 @@ export default function SalesDashboard() {
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
   const followUpPerformance = stats?.followUpPerformance ?? []
+  const campaignSourcePerformance = stats?.campaignSourcePerformance ?? []
   const campaigns = stats?.campaigns ?? []
   const campaignAnalyticsByDefinition = useMemo(() => {
     const entries = campaignDefinitions
       .map((definition) => {
-        const analytics = buildCampaignAnalytics(definition, campaigns)
+        const analytics = buildCampaignAnalytics(definition, campaigns, campaignSourcePerformance)
         return analytics ? [definition.id, analytics] : null
       })
       .filter((entry): entry is [string, CampaignAnalytics] => Boolean(entry))
 
     return new Map(entries)
-  }, [campaignDefinitions, campaigns])
+  }, [campaignDefinitions, campaignSourcePerformance, campaigns])
   const selectedCampaignDefinition = useMemo(
     () => campaignDefinitions.find((campaign) => campaign.id === selectedCampaignId) ?? null,
     [campaignDefinitions, selectedCampaignId],
@@ -1989,6 +2018,15 @@ export default function SalesDashboard() {
                             { label: 'Pattern', count: analytics.sourceMix.pattern },
                           ].filter((entry) => entry.count > 0).sort((a, b) => b.count - a.count)
                         : []
+                      const strongestSource = analytics?.sourcePerformance.length
+                        ? [...analytics.sourcePerformance]
+                          .sort((a, b) => {
+                            const aReply = a.leads > 0 ? a.replied / a.leads : 0
+                            const bReply = b.leads > 0 ? b.replied / b.leads : 0
+                            if (bReply !== aReply) return bReply - aReply
+                            return b.leads - a.leads
+                          })[0]
+                        : null
 
                       return (
                         <div
@@ -2055,12 +2093,16 @@ export default function SalesDashboard() {
                                 </p>
                               </div>
                               <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3">
-                                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">Source Mix</p>
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">Source Quality</p>
                                 <p className="mt-1 text-sm font-semibold text-neutral-900">
-                                  {sourceEntries.length ? sourceEntries.map((entry) => `${entry.label} ${entry.count}`).join(' · ') : 'No source data yet'}
+                                  {strongestSource
+                                    ? `${sourceLabel(strongestSource.source)} ${replyRate(strongestSource.replied, strongestSource.leads)} reply`
+                                    : (sourceEntries.length ? sourceEntries.map((entry) => `${entry.label} ${entry.count}`).join(' · ') : 'No source data yet')}
                                 </p>
                                 <p className="mt-1 text-[11px] text-neutral-500">
-                                  {analytics.totalRuns} tracked runs · {analytics.sent} sent
+                                  {strongestSource
+                                    ? `${strongestSource.leads} leads · ${strongestSource.bounced} bounced`
+                                    : `${analytics.totalRuns} tracked runs · ${analytics.sent} sent`}
                                 </p>
                               </div>
                             </div>
@@ -2325,6 +2367,38 @@ export default function SalesDashboard() {
                             </div>
                           </div>
                         </div>
+
+                        {selectedCampaignAnalytics.sourcePerformance.length ? (
+                          <div className="mt-4 rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Source Quality By Campaign</p>
+                            <div className="mt-3 space-y-2">
+                              {selectedCampaignAnalytics.sourcePerformance.map((source) => (
+                                <div key={source.source} className="grid grid-cols-[minmax(0,1.1fr)_repeat(4,minmax(0,0.8fr))] gap-2 rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3 text-sm">
+                                  <div>
+                                    <p className="font-medium text-neutral-900">{sourceLabel(source.source)}</p>
+                                    <p className="mt-1 text-xs text-neutral-500">{source.leads} leads tracked</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                                    <p className="mt-1 font-medium text-neutral-900">{source.replied}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                                    <p className="mt-1 font-medium text-neutral-900">{source.booked}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
+                                    <p className="mt-1 font-medium text-neutral-900">{source.bounced}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                                    <p className="mt-1 font-medium text-neutral-900">{replyRate(source.replied, source.leads)}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
 
