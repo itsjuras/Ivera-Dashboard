@@ -285,6 +285,7 @@ interface CrmTask {
   type: string
   status: string
   priority: string
+  owner_user_id: string | null
   due_at: string | null
   completed_at: string | null
   account_id: string | null
@@ -854,6 +855,10 @@ function priorityBadgeClass(priority: string) {
   return 'border border-neutral-200 bg-white text-neutral-500'
 }
 
+function isHotQueueTask(task: CrmTask) {
+  return ['hot_reply', 'booked_demo_follow_up', 'booked_meeting'].includes(task.type) || task.priority === 'high'
+}
+
 function formatStageLabel(stage: string) {
   return stage.replace(/_/g, ' ')
 }
@@ -907,7 +912,7 @@ async function salesRequest<T>(token: string, path: string, options: RequestInit
 }
 
 export default function SalesDashboard() {
-  const { session, role } = useAuth()
+  const { session, role, user } = useAuth()
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('outreach')
@@ -1460,6 +1465,9 @@ export default function SalesDashboard() {
       const bTime = b.due_at ? new Date(b.due_at).getTime() : Number.MAX_SAFE_INTEGER
       return aTime - bTime
     })
+  const hotQueueTasks = openTasks.filter(isHotQueueTask)
+  const myOpenTasks = user?.id ? openTasks.filter((task) => task.owner_user_id === user.id) : []
+  const unassignedOpenTasks = openTasks.filter((task) => !task.owner_user_id)
   const crmAccountRows = crmAccounts.map((account) => ({
     id: account.id,
     title: account.name,
@@ -1688,6 +1696,25 @@ export default function SalesDashboard() {
       await Promise.all([refreshCrmTasks(), refreshCrmAccounts(), refreshSelectedAccountDetail()])
     } catch (err) {
       setCrmError(err instanceof Error ? err.message : 'Failed to update task.')
+    } finally {
+      setSavingTaskId(null)
+    }
+  }
+
+  async function assignTask(taskId: string, ownerUserId: string | null) {
+    if (!session?.access_token) return
+
+    setSavingTaskId(taskId)
+    setCrmError(null)
+
+    try {
+      await salesRequest<{ task: CrmTask }>(session.access_token, `/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ owner_user_id: ownerUserId }),
+      })
+      await refreshCrmTasks()
+    } catch (err) {
+      setCrmError(err instanceof Error ? err.message : 'Failed to assign task.')
     } finally {
       setSavingTaskId(null)
     }
@@ -2021,6 +2048,104 @@ export default function SalesDashboard() {
       ) : activeTab === 'pipeline' ? (
         <div className="space-y-4">
           <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-xl border border-red-200/70 bg-red-50/60 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-neutral-900">Hot Reply Queue</h3>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    High-priority reply and booked-meeting tasks that should be picked up first.
+                  </p>
+                </div>
+                <span className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-red-700">
+                  {hotQueueTasks.length} hot
+                </span>
+              </div>
+              <div className="mt-4 space-y-2">
+                {hotQueueTasks.length ? hotQueueTasks.slice(0, 6).map((task) => {
+                  const isMine = Boolean(user?.id && task.owner_user_id === user.id)
+                  return (
+                    <div key={task.id} className="rounded-xl border border-red-100 bg-white/85 px-4 py-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-neutral-900">{task.title}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] ${priorityBadgeClass(task.priority)}`}>
+                              {task.priority}
+                            </span>
+                            {isMine ? (
+                              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                Mine
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-neutral-500">
+                            {[task.accounts?.name, task.account_contacts?.full_name, task.type].filter(Boolean).join(' · ')}
+                          </p>
+                          {task.description ? (
+                            <p className="mt-2 text-sm text-neutral-600">{task.description}</p>
+                          ) : null}
+                          <p className="mt-2 text-xs text-neutral-500">
+                            {task.due_at ? `Due ${formatRunDate(task.due_at)}` : 'No due date'}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (task.account_id) setSelectedAccountId(task.account_id)
+                            }}
+                            className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+                          >
+                            Open Account
+                          </button>
+                          {user?.id ? (
+                            <button
+                              type="button"
+                              onClick={() => void assignTask(task.id, isMine ? null : user.id)}
+                              disabled={savingTaskId === task.id}
+                              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700 disabled:opacity-50"
+                            >
+                              {isMine ? 'Unassign' : 'Assign to me'}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void updateTask(task.id, { status: 'completed' })}
+                            disabled={savingTaskId === task.id}
+                            className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                          >
+                            Complete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }) : (
+                  <p className="text-sm text-neutral-500">No hot replies or booked-meeting tasks right now.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Ownership</h3>
+              <p className="mt-1 text-xs text-neutral-500">A quick read on whether the queue is claimed or still floating.</p>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Open</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{openTasks.length}</p>
+                </div>
+                <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Mine</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{myOpenTasks.length}</p>
+                </div>
+                <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Unassigned</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{unassignedOpenTasks.length}</p>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
