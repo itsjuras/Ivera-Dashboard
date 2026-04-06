@@ -953,6 +953,20 @@ function stageIndex(stage: string) {
   return idx === -1 ? 0 : idx
 }
 
+// Returns a warning message if moving to `toStage` violates exit criteria, null if ok
+function stageExitWarning(toStage: string, opportunity: CrmOpportunity): string | null {
+  if (toStage === 'proposal' && !opportunity.amount_estimate) {
+    return 'Add a deal amount before moving to Proposal — it\'s needed for forecasting.'
+  }
+  if (toStage === 'won' && !opportunity.closed_amount && !opportunity.amount_estimate) {
+    return 'Add a closed amount before marking as Won.'
+  }
+  if (toStage === 'won' && !opportunity.qualified_summary) {
+    return 'Add a qualification summary before marking as Won — useful for pattern analysis.'
+  }
+  return null
+}
+
 const opportunityStageOptions = [
   'new',
   'engaged',
@@ -1049,6 +1063,7 @@ export default function SalesDashboard() {
   const [taskDueBucket, setTaskDueBucket] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'no_date'>('all')
   const [reportingData, setReportingData] = useState<ReportingData | null>(null)
   const [lostReasonModal, setLostReasonModal] = useState<{ opportunityId: string; reason: string } | null>(null)
+  const [stageExitModal, setStageExitModal] = useState<{ opportunityId: string; toStage: string; warning: string } | null>(null)
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
   const [opportunityComments, setOpportunityComments] = useState<Record<string, CrmComment[]>>({})
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
@@ -1604,6 +1619,18 @@ export default function SalesDashboard() {
   const noDueTasks = openTasks.filter((t) => !t.due_at)
   const myOpenTasks = user?.id ? openTasks.filter((task) => task.owner_user_id === user.id) : []
   const unassignedOpenTasks = openTasks.filter((task) => !task.owner_user_id)
+
+  // Handoff queue: AI-active (no owner) open opportunities that need a human
+  // Criteria: unowned + (high priority OR hot stage OR overdue next step)
+  const HOT_STAGES = new Set(['meeting_booked', 'qualified', 'proposal', 'verbal_commit'])
+  const handoffOpportunities = crmOpportunities.filter((opp) => {
+    if (opp.owner_user_id) return false // already claimed
+    if (['won', 'lost'].includes(opp.stage)) return false
+    const isHotStage = HOT_STAGES.has(opp.stage)
+    const isHighPriority = opp.priority === 'high'
+    const isOverdue = opp.next_step_due_at && new Date(opp.next_step_due_at) < todayStart
+    return isHotStage || isHighPriority || isOverdue
+  }).sort((a, b) => stageIndex(b.stage) - stageIndex(a.stage))
   const pipelineStages = opportunityStageOptions
   const filteredPipelineOpportunities = crmOpportunities.filter((opportunity) => {
     if (pipelineStageFilter !== 'all' && opportunity.stage !== pipelineStageFilter) return false
@@ -2399,6 +2426,78 @@ export default function SalesDashboard() {
               </div>
             </div>
           </div>
+          {handoffOpportunities.length > 0 ? (
+            <div className="rounded-xl border border-violet-200/70 bg-violet-50/50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-neutral-900">Handoff Queue</h3>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    AI-active opportunities at a hot stage or overdue — ready for a human to pick up.
+                  </p>
+                </div>
+                <span className="rounded-full border border-violet-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-violet-700">
+                  {handoffOpportunities.length} waiting
+                </span>
+              </div>
+              <div className="mt-4 space-y-2">
+                {handoffOpportunities.slice(0, 8).map((opp) => {
+                  const accountName = accountNameById.get(opp.account_id) || 'Account'
+                  const isOverdue = opp.next_step_due_at && new Date(opp.next_step_due_at) < todayStart
+                  return (
+                    <div key={opp.id} className="rounded-xl border border-violet-100 bg-white/85 px-4 py-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-neutral-900">{accountName}</p>
+                            <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-neutral-500">
+                              {formatStageLabel(opp.stage)}
+                            </span>
+                            {opp.priority === 'high' ? (
+                              <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-red-600">high</span>
+                            ) : null}
+                            {isOverdue ? (
+                              <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-red-600">overdue</span>
+                            ) : null}
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-violet-600">AI active</span>
+                          </div>
+                          {opp.next_step ? (
+                            <p className="mt-1 text-xs text-neutral-500">{opp.next_step}</p>
+                          ) : null}
+                          <p className="mt-1 text-[11px] text-neutral-400">
+                            {opp.next_step_due_at ? `Due ${formatRunDate(opp.next_step_due_at)}` : 'No due date'}
+                            {opp.amount_estimate ? ` · $${Number(opp.amount_estimate).toLocaleString()}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAccountId(opp.account_id)
+                              setPipelineView('workspace')
+                            }}
+                            className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+                          >
+                            Open
+                          </button>
+                          {user?.id ? (
+                            <button
+                              type="button"
+                              onClick={() => void updateOpportunity(opp.id, { owner_user_id: user.id })}
+                              disabled={savingOpportunityId === opp.id}
+                              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700 disabled:opacity-50"
+                            >
+                              Take over
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -2828,6 +2927,13 @@ export default function SalesDashboard() {
                                   const newStage = event.target.value
                                   if (newStage === 'lost') {
                                     setLostReasonModal({ opportunityId: opportunity.id, reason: '' })
+                                    return
+                                  }
+                                  const warning = stageExitWarning(newStage, opportunity)
+                                  if (warning) {
+                                    setStageExitModal({ opportunityId: opportunity.id, toStage: newStage, warning })
+                                    // Reset select visually — the actual update waits for confirmation
+                                    event.target.value = opportunity.stage
                                     return
                                   }
                                   const updates: Record<string, string | null> = { stage: newStage }
@@ -4313,6 +4419,39 @@ export default function SalesDashboard() {
                 className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
               >
                 Confirm Lost
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {stageExitModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-xl">
+            <h3 className="text-sm font-semibold text-neutral-900">Heads up before you advance</h3>
+            <p className="mt-2 text-sm text-amber-700 leading-relaxed">{stageExitModal.warning}</p>
+            <p className="mt-3 text-xs text-neutral-500">
+              You can still proceed — this is a warning, not a hard block.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setStageExitModal(null)}
+                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-700"
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updates: Record<string, string | null> = { stage: stageExitModal.toStage }
+                  if (stageExitModal.toStage === 'won') updates.won_at = new Date().toISOString()
+                  void updateOpportunity(stageExitModal.opportunityId, updates as Parameters<typeof updateOpportunity>[1])
+                  setStageExitModal(null)
+                }}
+                className="rounded-full border border-amber-500 bg-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white"
+              >
+                Advance anyway
               </button>
             </div>
           </div>
