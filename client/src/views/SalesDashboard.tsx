@@ -36,6 +36,13 @@ import {
 const SALES_API = 'https://sales.ivera.ca'
 
 interface PortalStats {
+  crm?: {
+    accounts: number
+    opportunities: number
+    open_opportunities: number
+    engaged_opportunities: number
+    meetings_booked: number
+  }
   totals: {
     emailed: number
     replied: number
@@ -875,6 +882,13 @@ export default function SalesDashboard() {
   }, [role, session])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
+  const crm = stats?.crm ?? {
+    accounts: 0,
+    opportunities: 0,
+    open_opportunities: 0,
+    engaged_opportunities: 0,
+    meetings_booked: 0,
+  }
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
   const followUpPerformance = stats?.followUpPerformance ?? []
@@ -1211,10 +1225,11 @@ export default function SalesDashboard() {
     { label: 'Unsub Rate', value: unsubscribeRate(overviewSummary.unsubscribed, overviewSummary.sent), hint: 'Opt-outs divided by sent' },
   ]
   const pipelineMetrics = [
-    { label: 'Meetings Booked', value: overviewSummary.booked, hint: overviewWindowLabel },
+    { label: 'Meetings Booked', value: crm.meetings_booked || overviewSummary.booked, hint: 'All tracked opportunities' },
     { label: 'Booked Rate', value: bookingRate(overviewSummary.booked, overviewSummary.sent), hint: 'Booked divided by sent' },
-    { label: 'Pipeline Leads', value: overviewSummary.pipeline, hint: 'Prospects in current window' },
-    { label: 'Recent Replies', value: overviewSummary.recentReplies, hint: 'Replies or bookings in window' },
+    { label: 'Accounts', value: crm.accounts, hint: 'Tracked accounts in CRM' },
+    { label: 'Open Opps', value: crm.open_opportunities, hint: 'Active opportunities' },
+    { label: 'Engaged Opps', value: crm.engaged_opportunities, hint: 'Engaged through proposal stages' },
   ]
   const qualityMetrics = [
     { label: 'Avg Lead Score', value: overviewSummary.avgScore, hint: 'Across scored leads in window' },
