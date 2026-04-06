@@ -1329,20 +1329,6 @@ export default function SalesDashboard() {
     [overviewLeads],
   )
 
-  const bookedProspects = useMemo(
-    () =>
-      recentLeads
-        .filter((lead) => lead.status === 'booked')
-        .slice(0, 6)
-        .map((lead) => ({
-          id: lead.id,
-          title: lead.company || lead.email || 'Prospect',
-          meta: `${lead.email || 'No email'} · ${timeAgo(lead.created_at)}`,
-          badge: typeof lead.qualify_score === 'number' ? `${lead.qualify_score}/10` : 'booked',
-        })),
-    [recentLeads],
-  )
-
   const highIntentProspects = useMemo(
     () =>
       recentLeads
@@ -2137,7 +2123,7 @@ export default function SalesDashboard() {
                   <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lifecycle</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccount.lifecycle_stage)}</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccountDetail.account.lifecycle_stage)}</p>
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
@@ -2149,7 +2135,7 @@ export default function SalesDashboard() {
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Updated</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{timeAgo(selectedAccount.updated_at)}</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{timeAgo(selectedAccountDetail.account.updated_at)}</p>
                     </div>
                   </div>
 
