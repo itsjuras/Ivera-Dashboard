@@ -72,6 +72,7 @@ interface PortalStats {
       leads_saved?: number
       sent?: number
       send_errors?: number
+      risky_domains_suppressed?: number
       report_status?: string
       report_error_message?: string
       warmup_limit?: number | null
@@ -84,6 +85,24 @@ interface PortalStats {
         fresh_added: number
         duplicate_candidates?: number
       }>
+      best_search_pass?: {
+        query: string
+        raw_candidates: number
+        fresh_added: number
+        duplicate_candidates?: number
+      } | null
+      email_sources?: {
+        exa?: number
+        scraped?: number
+        pattern?: number
+        skipped?: number
+      }
+      follow_up_branches?: {
+        clicked?: number
+        opened?: number
+        cold?: number
+        replied_later?: number
+      }
       status_breakdown?: {
         replied?: number
         booked?: number
@@ -305,6 +324,72 @@ function reportStatusLabel(status: string | undefined, error: string | undefined
   if (status === 'sent') return 'Report sent'
   if (status === 'failed') return error ? `Report failed: ${error}` : 'Report failed'
   return 'Report status unavailable'
+}
+
+function buildRunInsights(
+  diagnostics: PortalStats['campaigns'][number]['funnel_diagnostics'] | undefined,
+) {
+  if (!diagnostics) return []
+
+  const insights: string[] = []
+  const bestSearchPass = diagnostics.best_search_pass
+  if (bestSearchPass?.query && typeof bestSearchPass.fresh_added === 'number') {
+    insights.push(`Best search pass added ${bestSearchPass.fresh_added} fresh leads from "${bestSearchPass.query.slice(0, 72)}${bestSearchPass.query.length > 72 ? '…' : ''}"`)
+  }
+
+  const riskySuppressed = diagnostics.risky_domains_suppressed ?? 0
+  if (riskySuppressed > 0) {
+    insights.push(`${riskySuppressed} leads were suppressed because their domains already had risky bounce history`)
+  }
+
+  const sources = diagnostics.email_sources
+  if (sources) {
+    const sourceEntries = [
+      ['Exa', sources.exa ?? 0],
+      ['Scraped', sources.scraped ?? 0],
+      ['Pattern', sources.pattern ?? 0],
+    ]
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+
+    if (sourceEntries.length > 0) {
+      insights.push(`Most emails came from ${sourceEntries.map(([label, count]) => `${label.toLowerCase()} ${count}`).join(', ')}`)
+    }
+
+    if ((sources.pattern ?? 0) > 0 && (diagnostics.status_breakdown?.bounced ?? 0) > 0) {
+      insights.push('Pattern-guessed emails are still active in this run, so watch bounce pressure closely')
+    }
+  }
+
+  const branches = diagnostics.follow_up_branches
+  if (branches) {
+    const branchEntries = [
+      ['clicked', branches.clicked ?? 0],
+      ['opened', branches.opened ?? 0],
+      ['cold', branches.cold ?? 0],
+      ['replied later', branches.replied_later ?? 0],
+    ]
+      .filter(([, count]) => count > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+
+    if (branchEntries.length > 0) {
+      insights.push(`Follow-up branch mix: ${branchEntries.map(([label, count]) => `${label} ${count}`).join(', ')}`)
+    }
+  }
+
+  const noEmailFound = diagnostics.no_email_found ?? 0
+  const qualified = diagnostics.qualified ?? 0
+  if (qualified > 0 && noEmailFound / qualified >= 0.4) {
+    insights.push('Contact discovery was a bottleneck on this run, with many qualified leads missing usable personal email')
+  }
+
+  const bounced = diagnostics.status_breakdown?.bounced ?? 0
+  const sent = diagnostics.sent ?? 0
+  if (sent >= 5 && bounced / sent >= 0.2) {
+    insights.push(`Bounce pressure stayed elevated at ${Math.round((bounced / sent) * 100)}% of sent leads`)
+  }
+
+  return insights.slice(0, 4)
 }
 
 function buildLiveRunProgress(
@@ -870,6 +955,14 @@ export default function SalesDashboard() {
     [campaigns, selectedRunId],
   )
   const latestRunDiagnostics = campaigns[0]?.funnel_diagnostics
+  const latestRunInsights = useMemo(
+    () => buildRunInsights(latestRunDiagnostics),
+    [latestRunDiagnostics],
+  )
+  const selectedRunInsights = useMemo(
+    () => buildRunInsights(selectedRun?.funnel_diagnostics),
+    [selectedRun],
+  )
 
   const engagedProspects = useMemo(
     () =>
@@ -1408,6 +1501,18 @@ export default function SalesDashboard() {
                     <p className="mt-1 text-[11px] text-neutral-500">Delivered into the run</p>
                   </div>
                 </div>
+                {latestRunInsights.length ? (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
+                    <div className="mt-3 space-y-2">
+                      {latestRunInsights.map((insight) => (
+                        <p key={insight} className="text-sm text-neutral-700">
+                          {insight}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -2132,6 +2237,18 @@ export default function SalesDashboard() {
                         </p>
                       </div>
                     </div>
+                    {selectedRunInsights.length ? (
+                      <div className="mt-4 rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
+                        <div className="mt-3 space-y-2">
+                          {selectedRunInsights.map((insight) => (
+                            <p key={insight} className="text-sm text-neutral-700">
+                              {insight}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {selectedRun.funnel_diagnostics.search_passes?.length ? (
                       <div className="mt-4 space-y-2">
                         {selectedRun.funnel_diagnostics.search_passes.map((pass, index) => (
