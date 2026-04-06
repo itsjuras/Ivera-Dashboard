@@ -7,6 +7,10 @@ import {
   SlidersHorizontal,
   Play,
   X,
+  Pause,
+  RotateCcw,
+  Archive,
+  Plus,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -99,6 +103,8 @@ interface PortalStats {
 }
 
 interface CampaignConfig {
+  id?: string
+  name?: string
   product_name: string
   product_context: string
   target_description: string
@@ -107,6 +113,23 @@ interface CampaignConfig {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
+}
+
+interface CampaignDefinition {
+  id: string
+  name: string
+  product_name: string
+  product_context: string
+  target_description: string
+  num_leads_per_run: number
+  status: 'active' | 'paused' | 'archived'
+  is_default: boolean
+  created_at: string
+  updated_at: string
+  total_runs?: number
+  last_run_at?: string | null
+  last_run_status?: string | null
+  active_run_id?: string | null
 }
 
 interface ProspectHistory {
@@ -577,15 +600,22 @@ export default function SalesDashboard() {
     booked: true,
     unsubscribed: false,
   })
-  const [campaignConfig, setCampaignConfig] = useState<CampaignConfig | null>(null)
-  const [editableTargetDescription, setEditableTargetDescription] = useState('')
-  const [savingDescription, setSavingDescription] = useState(false)
-  const [configLoading, setConfigLoading] = useState(false)
+  const [campaignDefinitions, setCampaignDefinitions] = useState<CampaignDefinition[]>([])
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
+  const [editingCampaign, setEditingCampaign] = useState<CampaignConfig | null>(null)
+  const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
+  const [newCampaignDraft, setNewCampaignDraft] = useState<CampaignConfig>({
+    name: '',
+    product_name: '',
+    product_context: '',
+    target_description: '',
+    num_leads_per_run: 40,
+  })
+  const [savingCampaign, setSavingCampaign] = useState(false)
+  const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [adminActionMessage, setAdminActionMessage] = useState<string | null>(null)
   const [adminActionError, setAdminActionError] = useState<string | null>(null)
   const [runningCampaign, setRunningCampaign] = useState(false)
-  const [expectedLeadMin, setExpectedLeadMin] = useState('')
-  const [expectedLeadMax, setExpectedLeadMax] = useState('')
   const [manualLeadOverride, setManualLeadOverride] = useState('')
   const [pendingRun, setPendingRun] = useState<{
     startedAt: number
@@ -636,25 +666,25 @@ export default function SalesDashboard() {
 
   useEffect(() => {
     if (!session?.access_token || role !== 'ivera_admin') {
-      setCampaignConfig(null)
+      setCampaignDefinitions([])
+      setSelectedCampaignId(null)
+      setEditingCampaign(null)
       return
     }
 
     let cancelled = false
-    setConfigLoading(true)
+    setCampaignsLoading(true)
 
-    salesRequest<{ config: CampaignConfig }>(session.access_token, '/campaign/config')
+    salesRequest<{ campaigns: CampaignDefinition[] }>(session.access_token, '/campaigns')
       .then((data) => {
-        if (!cancelled) {
-          setCampaignConfig(data.config)
-          setEditableTargetDescription(data.config.target_description || '')
-        }
+        if (cancelled) return
+        setCampaignDefinitions(data.campaigns)
       })
       .catch((err: Error) => {
         if (!cancelled) setAdminActionError(err.message)
       })
       .finally(() => {
-        if (!cancelled) setConfigLoading(false)
+        if (!cancelled) setCampaignsLoading(false)
       })
 
     return () => {
@@ -662,24 +692,47 @@ export default function SalesDashboard() {
     }
   }, [role, session])
 
-  useEffect(() => {
-    if (!campaignConfig) return
-
-    const suggestedMin = Math.max(5, Math.floor(campaignConfig.num_leads_per_run * 0.7))
-    const suggestedMax = Math.max(suggestedMin, Math.ceil(campaignConfig.num_leads_per_run * 1.3))
-
-    setExpectedLeadMin((current) => current || String(suggestedMin))
-    setExpectedLeadMax((current) => current || String(suggestedMax))
-  }, [campaignConfig])
-
-  useEffect(() => {
-    setEditableTargetDescription(campaignConfig?.target_description || '')
-  }, [campaignConfig?.target_description])
-
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
   const campaigns = stats?.campaigns ?? []
+  const selectedCampaignDefinition = useMemo(
+    () => campaignDefinitions.find((campaign) => campaign.id === selectedCampaignId) ?? null,
+    [campaignDefinitions, selectedCampaignId],
+  )
+
+  useEffect(() => {
+    if (!campaignDefinitions.length) {
+      setSelectedCampaignId(null)
+      setEditingCampaign(null)
+      return
+    }
+
+    const preferred = campaignDefinitions.find((campaign) => campaign.is_default) ?? campaignDefinitions[0]
+
+    setSelectedCampaignId((current) => {
+      if (current && campaignDefinitions.some((campaign) => campaign.id === current)) {
+        return current
+      }
+      return preferred.id
+    })
+  }, [campaignDefinitions])
+
+  useEffect(() => {
+    if (!selectedCampaignDefinition) {
+      setEditingCampaign(null)
+      return
+    }
+
+    setEditingCampaign({
+      id: selectedCampaignDefinition.id,
+      name: selectedCampaignDefinition.name,
+      product_name: selectedCampaignDefinition.product_name,
+      product_context: selectedCampaignDefinition.product_context,
+      target_description: selectedCampaignDefinition.target_description,
+      num_leads_per_run: selectedCampaignDefinition.num_leads_per_run,
+    })
+  }, [selectedCampaignDefinition])
 
   const overviewLeads = useMemo(
     () => recentLeads.filter((lead) => leadWithinDays(lead.created_at, overviewDays)),
@@ -726,15 +779,8 @@ export default function SalesDashboard() {
     [leadActivitySeries, overviewLeads, overviewDays],
   )
 
-  const parsedExpectedMin = Number(expectedLeadMin)
-  const parsedExpectedMax = Number(expectedLeadMax)
   const parsedManualOverride = Number(manualLeadOverride)
   const hasManualOverride = manualLeadOverride.trim().length > 0 && Number.isFinite(parsedManualOverride)
-  const overrideOutsideRange =
-    hasManualOverride &&
-    Number.isFinite(parsedExpectedMin) &&
-    Number.isFinite(parsedExpectedMax) &&
-    (parsedManualOverride < parsedExpectedMin || parsedManualOverride > parsedExpectedMax)
 
   const matchingPendingCampaign = useMemo(() => {
     if (!pendingRun) return null
@@ -771,7 +817,7 @@ export default function SalesDashboard() {
   const liveCampaign = matchingPendingCampaign ?? activeCampaign
   const liveCampaignProgress = pendingRunProgress ?? activeCampaignProgress
   const hasActiveCampaign = campaigns.some((campaign) => campaign.status === 'active')
-  const runStartDisabled = runningCampaign || savingDescription || hasActiveCampaign
+  const runStartDisabled = runningCampaign || savingCampaign || hasActiveCampaign
   const latestCampaignRuns = useMemo(
     () => {
       const rows = campaigns.slice(0, 8).map((campaign) => ({
@@ -872,6 +918,7 @@ export default function SalesDashboard() {
 
     const pollTimer = window.setInterval(() => {
       void refreshStats()
+      void refreshCampaignDefinitions()
     }, 10000)
 
     return () => {
@@ -886,6 +933,7 @@ export default function SalesDashboard() {
     function handleResume() {
       setRunTimerNow(Date.now())
       void refreshStats()
+      void refreshCampaignDefinitions()
     }
 
     function handleVisibilityChange() {
@@ -974,7 +1022,13 @@ export default function SalesDashboard() {
     setStats(data)
   }
 
-  async function handleRunCampaign() {
+  async function refreshCampaignDefinitions() {
+    if (!session?.access_token || role !== 'ivera_admin') return
+    const data = await salesRequest<{ campaigns: CampaignDefinition[] }>(session.access_token, '/campaigns')
+    setCampaignDefinitions(data.campaigns)
+  }
+
+  async function handleRunCampaign(definitionId: string) {
     if (!session?.access_token) return
     setRunningCampaign(true)
     setAdminActionError(null)
@@ -983,13 +1037,13 @@ export default function SalesDashboard() {
     try {
       const requestedLeadCount = hasManualOverride ? Math.round(parsedManualOverride) : undefined
       const startedAt = Date.now()
-      const data = await salesRequest<{ message: string }>(session.access_token, '/campaign/start', {
+      const data = await salesRequest<{ message: string }>(session.access_token, `/campaigns/${definitionId}/start`, {
         method: 'POST',
         body: JSON.stringify(requestedLeadCount ? { num_leads: requestedLeadCount } : {}),
       })
       setPendingRun({
         startedAt,
-        title: campaignConfig?.product_name || 'Campaign run',
+        title: selectedCampaignDefinition?.product_name || 'Campaign run',
         requestedLeadCount: requestedLeadCount ?? null,
         campaignId: null,
         completedAt: null,
@@ -1000,7 +1054,7 @@ export default function SalesDashboard() {
           ? `${data.message || 'Campaign started.'} Manual override: ${requestedLeadCount} leads.`
           : (data.message || 'Campaign started.'),
       )
-      await refreshStats()
+      await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to start campaign.')
     } finally {
@@ -1008,25 +1062,83 @@ export default function SalesDashboard() {
     }
   }
 
-  async function saveCampaignDescription() {
-    if (!session?.access_token || !campaignConfig) return
-    setSavingDescription(true)
+  async function saveCampaignDefinition() {
+    if (!session?.access_token || !editingCampaign?.id) return
+    setSavingCampaign(true)
     setAdminActionError(null)
     setAdminActionMessage(null)
 
     try {
-      const data = await salesRequest<{ config: CampaignConfig; message: string }>(session.access_token, '/campaign/config', {
+      const data = await salesRequest<{ campaign: CampaignDefinition; message: string }>(
+        session.access_token,
+        `/campaigns/${editingCampaign.id}`,
+        {
         method: 'PATCH',
-        body: JSON.stringify({ target_description: editableTargetDescription }),
-      })
-      setCampaignConfig(data.config)
-      setEditableTargetDescription(data.config.target_description || '')
-      setAdminActionMessage(data.message || 'Campaign description saved.')
-      await refreshStats()
+          body: JSON.stringify({
+            name: editingCampaign.name,
+            product_name: editingCampaign.product_name,
+            product_context: editingCampaign.product_context,
+            target_description: editingCampaign.target_description,
+            num_leads_per_run: editingCampaign.num_leads_per_run,
+            is_default: true,
+          }),
+        },
+      )
+      setSelectedCampaignId(data.campaign.id)
+      setAdminActionMessage(data.message || 'Campaign saved.')
+      await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
-      setAdminActionError(err instanceof Error ? err.message : 'Failed to save campaign description.')
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to save campaign.')
     } finally {
-      setSavingDescription(false)
+      setSavingCampaign(false)
+    }
+  }
+
+  async function createCampaignDefinition() {
+    if (!session?.access_token) return
+    setSavingCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ campaign: CampaignDefinition; message: string }>(session.access_token, '/campaigns', {
+        method: 'POST',
+        body: JSON.stringify(newCampaignDraft),
+      })
+      setShowNewCampaignForm(false)
+      setNewCampaignDraft({
+        name: '',
+        product_name: editingCampaign?.product_name || '',
+        product_context: editingCampaign?.product_context || '',
+        target_description: editingCampaign?.target_description || '',
+        num_leads_per_run: editingCampaign?.num_leads_per_run || 40,
+      })
+      setSelectedCampaignId(data.campaign.id)
+      setAdminActionMessage(data.message || 'Campaign created.')
+      await refreshCampaignDefinitions()
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to create campaign.')
+    } finally {
+      setSavingCampaign(false)
+    }
+  }
+
+  async function handleCampaignAction(definitionId: string, action: 'pause' | 'restart' | 'archive') {
+    if (!session?.access_token) return
+    setSavingCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ message: string }>(session.access_token, `/campaigns/${definitionId}/${action}`, {
+        method: 'POST',
+      })
+      setAdminActionMessage(data.message || `Campaign ${action}ed.`)
+      await Promise.all([refreshStats(), refreshCampaignDefinitions()])
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : `Failed to ${action} campaign.`)
+    } finally {
+      setSavingCampaign(false)
     }
   }
 
@@ -1436,104 +1548,307 @@ export default function SalesDashboard() {
         </div>
       )}
 
-      {role === 'ivera_admin' && (
-        <div className="mt-6 space-y-4">
-          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-4">
-                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Admin Controls</p>
-                {configLoading ? (
-                  <p className="text-sm text-neutral-500">Loading current campaign config...</p>
-                ) : campaignConfig ? (
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-neutral-900">{campaignConfig.product_name}</p>
-                    <p className="text-xs uppercase tracking-wider text-neutral-500">{campaignConfig.num_leads_per_run} leads per run</p>
+      {activeTab === 'outreach' && (
+        <div className="mt-6 space-y-6">
+          {role === 'ivera_admin' ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Manager</p>
+                    <h3 className="mt-1 text-sm font-semibold text-neutral-900">Outreach campaigns</h3>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Create campaigns, tune their copy, and control which ones can start, pause, restart, or archive.
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewCampaignForm((current) => !current)
+                      setNewCampaignDraft({
+                        name: '',
+                        product_name: editingCampaign?.product_name || selectedCampaignDefinition?.product_name || '',
+                        product_context: editingCampaign?.product_context || selectedCampaignDefinition?.product_context || '',
+                        target_description: editingCampaign?.target_description || selectedCampaignDefinition?.target_description || '',
+                        num_leads_per_run: editingCampaign?.num_leads_per_run || selectedCampaignDefinition?.num_leads_per_run || 40,
+                      })
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800"
+                  >
+                    <Plus size={12} />
+                    Add Campaign
+                  </button>
+                </div>
+
+                {campaignsLoading ? (
+                  <p className="mt-4 text-sm text-neutral-500">Loading campaigns...</p>
                 ) : (
-                  <p className="text-sm text-neutral-500">No live campaign config loaded.</p>
-                )}
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                    {campaignDefinitions.map((campaign) => (
+                      <div
+                        key={campaign.id}
+                        onClick={() => setSelectedCampaignId(campaign.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setSelectedCampaignId(campaign.id)
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className={`rounded-xl border px-4 py-4 text-left transition ${
+                          selectedCampaignId === campaign.id
+                            ? 'border-neutral-900 bg-neutral-50'
+                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
+                              {campaign.is_default ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                  Default
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
+                            <p className="mt-2 text-xs text-neutral-500">
+                              {campaign.num_leads_per_run} leads/run · {campaign.total_runs || 0} runs · {campaign.last_run_at ? `last run ${timeAgo(campaign.last_run_at)}` : 'never run'}
+                            </p>
+                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
+                            {campaign.status}
+                          </span>
+                        </div>
 
-                <div className="grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-3">
-                  <label className="space-y-2">
-                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Expected Min Leads</span>
-                    <input
-                      type="number"
-                      min={5}
-                      step={1}
-                      value={expectedLeadMin}
-                      onChange={(event) => setExpectedLeadMin(event.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Expected Max Leads</span>
-                    <input
-                      type="number"
-                      min={5}
-                      step={1}
-                      value={expectedLeadMax}
-                      onChange={(event) => setExpectedLeadMax(event.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Manual Override This Run</span>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={manualLeadOverride}
-                      onChange={(event) => setManualLeadOverride(event.target.value)}
-                      placeholder={campaignConfig ? String(campaignConfig.num_leads_per_run) : '40'}
-                      className="w-full rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
-                    />
-                  </label>
-                </div>
-
-                {overrideOutsideRange && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                    Manual override is outside your expected range for this run. It will still be used when you click <span className="font-medium">Run Campaign</span>.
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleRunCampaign(campaign.id)
+                            }}
+                            disabled={runStartDisabled || campaign.status === 'archived'}
+                            className="inline-flex items-center gap-1 rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Play size={11} />
+                            Start
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'pause')
+                            }}
+                            disabled={savingCampaign}
+                            className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Pause size={11} />
+                            Pause
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'restart')
+                            }}
+                            disabled={runStartDisabled}
+                            className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <RotateCcw size={11} />
+                            Restart
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'archive')
+                            }}
+                            disabled={savingCampaign}
+                            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Archive size={11} />
+                            Archive
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                <div className="pt-2">
-                  <label
-                    htmlFor="campaign-description"
-                    className="mb-2 block text-[11px] tracking-widest uppercase text-neutral-400"
-                  >
-                    Campaign Description
-                  </label>
-                  <textarea
-                    id="campaign-description"
-                    value={editableTargetDescription}
-                    onChange={(event) => setEditableTargetDescription(event.target.value)}
-                    rows={6}
-                    className="w-full max-w-4xl rounded-xl border border-neutral-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
-                  />
-                </div>
+                {showNewCampaignForm ? (
+                  <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Campaign Name</span>
+                        <input
+                          type="text"
+                          value={newCampaignDraft.name || ''}
+                          onChange={(event) => setNewCampaignDraft((current) => ({ ...current, name: event.target.value }))}
+                          className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Leads Per Run</span>
+                        <input
+                          type="number"
+                          min={5}
+                          step={1}
+                          value={newCampaignDraft.num_leads_per_run}
+                          onChange={(event) => setNewCampaignDraft((current) => ({ ...current, num_leads_per_run: Number(event.target.value) || 40 }))}
+                          className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                        />
+                      </label>
+                    </div>
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Name</span>
+                      <input
+                        type="text"
+                        value={newCampaignDraft.product_name}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, product_name: event.target.value }))}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Context</span>
+                      <textarea
+                        value={newCampaignDraft.product_context}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, product_context: event.target.value }))}
+                        rows={4}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Target Description</span>
+                      <textarea
+                        value={newCampaignDraft.target_description}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, target_description: event.target.value }))}
+                        rows={6}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={createCampaignDefinition}
+                        disabled={savingCampaign}
+                        className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingCampaign ? 'Creating...' : 'Create Campaign'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewCampaignForm(false)}
+                        className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
-                <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={saveCampaignDescription}
-                    disabled={savingDescription || runningCampaign}
-                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {savingDescription ? 'Saving...' : 'Save Description'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRunCampaign}
-                    disabled={runStartDisabled}
-                    className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <Play size={12} />
-                    {runningCampaign ? 'Starting...' : hasActiveCampaign ? 'Campaign Running' : 'Run Campaign'}
-                  </button>
-                </div>
+                {selectedCampaignDefinition && editingCampaign ? (
+                  <div className="mt-5 rounded-xl border border-neutral-200 bg-white/80 p-4">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Selected Campaign</p>
+                        <h4 className="mt-1 text-sm font-semibold text-neutral-900">{selectedCampaignDefinition.name}</h4>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {selectedCampaignDefinition.is_default ? 'Default campaign config' : 'Save here to make this the new default config'}
+                        </p>
+                      </div>
+                      <label className="space-y-2">
+                        <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Manual Override This Run</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={manualLeadOverride}
+                          onChange={(event) => setManualLeadOverride(event.target.value)}
+                          placeholder={String(selectedCampaignDefinition.num_leads_per_run)}
+                          className="w-full min-w-40 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Campaign Name</span>
+                        <input
+                          type="text"
+                          value={editingCampaign.name || ''}
+                          onChange={(event) => setEditingCampaign((current) => (current ? { ...current, name: event.target.value } : current))}
+                          className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Leads Per Run</span>
+                        <input
+                          type="number"
+                          min={5}
+                          step={1}
+                          value={editingCampaign.num_leads_per_run}
+                          onChange={(event) => setEditingCampaign((current) => (current ? { ...current, num_leads_per_run: Number(event.target.value) || 40 } : current))}
+                          className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Name</span>
+                      <input
+                        type="text"
+                        value={editingCampaign.product_name}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, product_name: event.target.value } : current))}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Context</span>
+                      <textarea
+                        value={editingCampaign.product_context}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, product_context: event.target.value } : current))}
+                        rows={4}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+
+                    <label className="mt-3 block space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Campaign Description</span>
+                      <textarea
+                        value={editingCampaign.target_description}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, target_description: event.target.value } : current))}
+                        rows={8}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={saveCampaignDefinition}
+                        disabled={savingCampaign || runningCampaign}
+                        className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingCampaign ? 'Saving...' : 'Save Campaign'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
+                        disabled={runStartDisabled || selectedCampaignDefinition.status === 'archived'}
+                        className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Play size={12} />
+                        {runningCampaign ? 'Starting...' : hasActiveCampaign ? 'Campaign Running' : 'Start Campaign'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {hasActiveCampaign && !pendingRun ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
                     A campaign is already running. Wait for it to finish before starting another one.
                   </div>
                 ) : null}
@@ -1604,25 +1919,21 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                 ) : null}
+
+                {adminActionMessage ? (
+                  <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    {adminActionMessage}
+                  </div>
+                ) : null}
+                {adminActionError ? (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {adminActionError}
+                  </div>
+                ) : null}
               </div>
             </div>
+          ) : null}
 
-            {adminActionMessage && (
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {adminActionMessage}
-              </div>
-            )}
-            {adminActionError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {adminActionError}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'outreach' && (
-        <div className="mt-6">
           <ListCard
             title="Recent Runs"
             subtitle="Click any run to open the full targeting, positioning, and delivery details"
