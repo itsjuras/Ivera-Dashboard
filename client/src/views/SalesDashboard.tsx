@@ -392,6 +392,53 @@ function buildRunInsights(
   return insights.slice(0, 4)
 }
 
+function buildRecommendedActions(
+  diagnostics: PortalStats['campaigns'][number]['funnel_diagnostics'] | undefined,
+) {
+  if (!diagnostics) return []
+
+  const actions: string[] = []
+  const qualified = diagnostics.qualified ?? 0
+  const noEmailFound = diagnostics.no_email_found ?? 0
+  const sent = diagnostics.sent ?? 0
+  const bounced = diagnostics.status_breakdown?.bounced ?? 0
+  const riskySuppressed = diagnostics.risky_domains_suppressed ?? 0
+  const patternEmails = diagnostics.email_sources?.pattern ?? 0
+  const coldBranch = diagnostics.follow_up_branches?.cold ?? 0
+  const clickedBranch = diagnostics.follow_up_branches?.clicked ?? 0
+  const openedBranch = diagnostics.follow_up_branches?.opened ?? 0
+
+  if (qualified > 0 && noEmailFound / qualified >= 0.4) {
+    actions.push('Tighten contact discovery for this ICP before the next run. Too many qualified leads are failing at the personal-email step.')
+  }
+
+  if (sent >= 5 && bounced / sent >= 0.2) {
+    actions.push('Reduce risky sends next run. Prefer scraped or Exa-confirmed emails and trim pattern-guessed addresses for this campaign.')
+  }
+
+  if (patternEmails > 0 && bounced > 0) {
+    actions.push('Review whether this campaign should temporarily disable pattern guesses. They are still contributing risk here.')
+  }
+
+  if (riskySuppressed > 0) {
+    actions.push('Refine targeting away from domains with repeat bounce history, or create a separate campaign wedge with cleaner account sources.')
+  }
+
+  if (coldBranch > openedBranch + clickedBranch && coldBranch >= 3) {
+    actions.push('Your follow-up sequence is staying mostly cold. Test a stronger touch-2 subject line or a narrower ICP before scaling this campaign.')
+  }
+
+  if (clickedBranch > 0) {
+    actions.push('Clicked leads are showing intent. Consider a more direct CTA or a faster human handoff for that branch.')
+  }
+
+  if (!actions.length && sent > 0) {
+    actions.push('This run looks operationally healthy. Keep the same campaign live and use the next run to compare reply and click behavior by follow-up branch.')
+  }
+
+  return actions.slice(0, 3)
+}
+
 function buildLiveRunProgress(
   run: PortalStats['campaigns'][number] | null,
   startedAt: number,
@@ -959,8 +1006,16 @@ export default function SalesDashboard() {
     () => buildRunInsights(latestRunDiagnostics),
     [latestRunDiagnostics],
   )
+  const latestRunActions = useMemo(
+    () => buildRecommendedActions(latestRunDiagnostics),
+    [latestRunDiagnostics],
+  )
   const selectedRunInsights = useMemo(
     () => buildRunInsights(selectedRun?.funnel_diagnostics),
+    [selectedRun],
+  )
+  const selectedRunActions = useMemo(
+    () => buildRecommendedActions(selectedRun?.funnel_diagnostics),
     [selectedRun],
   )
 
@@ -1508,6 +1563,18 @@ export default function SalesDashboard() {
                       {latestRunInsights.map((insight) => (
                         <p key={insight} className="text-sm text-neutral-700">
                           {insight}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {latestRunActions.length ? (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                    <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
+                    <div className="mt-3 space-y-2">
+                      {latestRunActions.map((action) => (
+                        <p key={action} className="text-sm text-neutral-700">
+                          {action}
                         </p>
                       ))}
                     </div>
@@ -2244,6 +2311,18 @@ export default function SalesDashboard() {
                           {selectedRunInsights.map((insight) => (
                             <p key={insight} className="text-sm text-neutral-700">
                               {insight}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {selectedRunActions.length ? (
+                      <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
+                        <div className="mt-3 space-y-2">
+                          {selectedRunActions.map((action) => (
+                            <p key={action} className="text-sm text-neutral-700">
+                              {action}
                             </p>
                           ))}
                         </div>
