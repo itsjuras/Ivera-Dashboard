@@ -559,7 +559,7 @@ export default function SalesDashboard() {
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('outreach')
-  const [overviewDays, setOverviewDays] = useState<OverviewDays>(14)
+  const [overviewDays, setOverviewDays] = useState<OverviewDays>(0)
   const [prospectDays, setProspectDays] = useState<ProspectDays>(30)
   const [prospectStatus, setProspectStatus] = useState<ProspectStatus>('all')
   const [prospectScore, setProspectScore] = useState<ProspectScore>('all')
@@ -1118,7 +1118,10 @@ export default function SalesDashboard() {
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">Lead Activity</h3>
-                <p className="mt-1 text-xs text-neutral-500">Live lead activity with time and layer filters</p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Live lead activity with time and layer filters. Showing {leadActivity.length}{' '}
+                  {leadActivity.length === 1 ? 'day' : 'days'} in {overviewWindowLabel.toLowerCase()}.
+                </p>
               </div>
               <div className="flex flex-col gap-3 lg:items-end">
                 <div className="flex flex-wrap items-center gap-2">
