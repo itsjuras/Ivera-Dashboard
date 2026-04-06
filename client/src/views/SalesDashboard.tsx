@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   Send,
   Reply,
+  Building2,
   SlidersHorizontal,
   Play,
   X,
@@ -216,6 +217,72 @@ interface CampaignAnalytics {
   }>
   latestRun: PortalStats['campaigns'][number] | null
   healthScore: number
+}
+
+interface CrmAccountSummary {
+  id: string
+  name: string
+  domain: string | null
+  industry: string | null
+  segment: string | null
+  geo: string | null
+  employee_band: string | null
+  website: string | null
+  phone: string | null
+  status: string
+  lifecycle_stage: string
+  created_at: string
+  updated_at: string
+}
+
+interface CrmContact {
+  id: string
+  full_name: string | null
+  role: string | null
+  email: string | null
+  phone: string | null
+  linkedin_url: string | null
+  is_primary: boolean
+  contact_source: string | null
+  status: string
+}
+
+interface CrmOpportunity {
+  id: string
+  account_id: string
+  primary_contact_id: string | null
+  stage: string
+  amount_estimate: number | null
+  priority: string
+  source: string | null
+  qualified_summary: string | null
+  pain_summary: string | null
+  next_step: string | null
+  next_step_due_at: string | null
+  last_activity_at: string | null
+  won_at: string | null
+  lost_at: string | null
+  lost_reason: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface CrmActivity {
+  id: string
+  type: string
+  direction: string | null
+  channel: string | null
+  subject: string | null
+  body: string | null
+  meta?: Record<string, string | number | boolean | null>
+  occurred_at: string
+}
+
+interface CrmAccountDetail {
+  account: CrmAccountSummary
+  contacts: CrmContact[]
+  opportunities: CrmOpportunity[]
+  activities: CrmActivity[]
 }
 
 interface ProspectHistory {
@@ -749,6 +816,33 @@ function timelineTypeLabel(type: string) {
   return labels[type] || 'Activity'
 }
 
+function formatStageLabel(stage: string) {
+  return stage.replace(/_/g, ' ')
+}
+
+function formatDateTimeInputValue(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function parseDateTimeInputValue(value: string) {
+  if (!value.trim()) return null
+  return new Date(value).toISOString()
+}
+
+const opportunityStageOptions = [
+  'new',
+  'engaged',
+  'meeting_booked',
+  'qualified',
+  'proposal',
+  'verbal_commit',
+  'won',
+  'lost',
+] as const
+
 async function salesRequest<T>(token: string, path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${SALES_API}${path}`, {
     ...options,
@@ -819,6 +913,12 @@ export default function SalesDashboard() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [prospectHistory, setProspectHistory] = useState<ProspectHistory | null>(null)
+  const [crmAccounts, setCrmAccounts] = useState<CrmAccountSummary[]>([])
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [selectedAccountDetail, setSelectedAccountDetail] = useState<CrmAccountDetail | null>(null)
+  const [crmLoading, setCrmLoading] = useState(false)
+  const [crmError, setCrmError] = useState<string | null>(null)
+  const [savingOpportunityId, setSavingOpportunityId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -880,6 +980,70 @@ export default function SalesDashboard() {
       cancelled = true
     }
   }, [role, session])
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      setCrmAccounts([])
+      setSelectedAccountId(null)
+      setSelectedAccountDetail(null)
+      return
+    }
+
+    let cancelled = false
+    setCrmLoading(true)
+    setCrmError(null)
+
+    salesRequest<{ accounts: CrmAccountSummary[] }>(session.access_token, '/accounts')
+      .then((data) => {
+        if (cancelled) return
+        setCrmAccounts(data.accounts)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setCrmError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setCrmLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!crmAccounts.length) {
+      setSelectedAccountId(null)
+      setSelectedAccountDetail(null)
+      return
+    }
+
+    setSelectedAccountId((current) => (
+      current && crmAccounts.some((account) => account.id === current)
+        ? current
+        : crmAccounts[0].id
+    ))
+  }, [crmAccounts])
+
+  useEffect(() => {
+    if (!session?.access_token || !selectedAccountId) {
+      setSelectedAccountDetail(null)
+      return
+    }
+
+    let cancelled = false
+
+    salesRequest<CrmAccountDetail>(session.access_token, `/accounts/${selectedAccountId}`)
+      .then((data) => {
+        if (!cancelled) setSelectedAccountDetail(data)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setCrmError(err.message)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedAccountId, session])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const crm = stats?.crm ?? {
@@ -1147,6 +1311,8 @@ export default function SalesDashboard() {
     const pollTimer = window.setInterval(() => {
       void refreshStats()
       void refreshCampaignDefinitions()
+      void refreshCrmAccounts()
+      void refreshSelectedAccountDetail()
     }, 10000)
 
     return () => {
@@ -1162,6 +1328,8 @@ export default function SalesDashboard() {
       setRunTimerNow(Date.now())
       void refreshStats()
       void refreshCampaignDefinitions()
+      void refreshCrmAccounts()
+      void refreshSelectedAccountDetail()
     }
 
     function handleVisibilityChange() {
@@ -1237,6 +1405,15 @@ export default function SalesDashboard() {
     { label: 'Scored Leads', value: overviewSummary.scored, hint: 'Leads with a quality score' },
     { label: 'Booked', value: overviewSummary.booked, hint: 'Booked prospects in window' },
   ]
+  const selectedAccount = selectedAccountDetail?.account ?? null
+  const crmAccountRows = crmAccounts.map((account) => ({
+    id: account.id,
+    title: account.name,
+    meta: [account.domain, account.geo, account.segment].filter(Boolean).join(' · ') || 'Tracked account',
+    badge: formatStageLabel(account.lifecycle_stage),
+    detail: account.updated_at ? `Updated ${timeAgo(account.updated_at)}` : undefined,
+    interactive: true,
+  }))
 
   const layerOptions: Array<{ key: LayerKey; label: string }> = [
     { key: 'sent', label: 'Sent' },
@@ -1255,6 +1432,18 @@ export default function SalesDashboard() {
     if (!session?.access_token || role !== 'ivera_admin') return
     const data = await salesRequest<{ campaigns: CampaignDefinition[] }>(session.access_token, '/campaigns')
     setCampaignDefinitions(data.campaigns)
+  }
+
+  async function refreshCrmAccounts() {
+    if (!session?.access_token) return
+    const data = await salesRequest<{ accounts: CrmAccountSummary[] }>(session.access_token, '/accounts')
+    setCrmAccounts(data.accounts)
+  }
+
+  async function refreshSelectedAccountDetail(accountId = selectedAccountId) {
+    if (!session?.access_token || !accountId) return
+    const data = await salesRequest<CrmAccountDetail>(session.access_token, `/accounts/${accountId}`)
+    setSelectedAccountDetail(data)
   }
 
   async function handleRunCampaign(definitionId: string) {
@@ -1400,6 +1589,28 @@ export default function SalesDashboard() {
       setAdminActionError(err instanceof Error ? err.message : `Failed to ${actionLabel} campaign.`)
     } finally {
       setSavingCampaign(false)
+    }
+  }
+
+  async function updateOpportunity(
+    opportunityId: string,
+    updates: Partial<Pick<CrmOpportunity, 'stage' | 'next_step' | 'next_step_due_at' | 'priority' | 'qualified_summary' | 'pain_summary' | 'lost_reason'>>,
+  ) {
+    if (!session?.access_token) return
+
+    setSavingOpportunityId(opportunityId)
+    setCrmError(null)
+
+    try {
+      await salesRequest<{ opportunity: CrmOpportunity }>(session.access_token, `/opportunities/${opportunityId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await Promise.all([refreshStats(), refreshCrmAccounts(), refreshSelectedAccountDetail()])
+    } catch (err) {
+      setCrmError(err instanceof Error ? err.message : 'Failed to update opportunity.')
+    } finally {
+      setSavingOpportunityId(null)
     }
   }
 
@@ -1731,19 +1942,202 @@ export default function SalesDashboard() {
       ) : activeTab === 'pipeline' ? (
         <div className="space-y-4">
           <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
             <ListCard
-              title="Booked Prospects"
-              subtitle="Meetings already captured from the current pipeline"
-              rows={bookedProspects}
-              emptyLabel="No meetings booked"
+              title="Accounts"
+              subtitle="Tracked companies now linked into the CRM layer"
+              rows={crmAccountRows}
+              emptyLabel={crmLoading ? 'Loading accounts' : 'No tracked accounts yet'}
+              onRowClick={(id) => setSelectedAccountId(id)}
             />
-            <ListCard
-              title="Fastest Movers"
-              subtitle="Recent leads already showing reply or booking intent"
-              rows={engagedProspects.filter((row) => row.badge !== 'unsubscribed')}
-              emptyLabel="No active movement yet"
-            />
+
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-neutral-100 p-2">
+                  <Building2 size={16} className="text-neutral-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-neutral-900">
+                    {selectedAccount?.name || 'Account detail'}
+                  </h3>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {selectedAccount
+                      ? [selectedAccount.domain, selectedAccount.geo, selectedAccount.segment].filter(Boolean).join(' · ') || 'Tracked account'
+                      : 'Select an account to inspect linked contacts, opportunities, and recent CRM activity.'}
+                  </p>
+                </div>
+              </div>
+
+              {crmError ? (
+                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{crmError}</p>
+              ) : null}
+
+              {selectedAccountDetail ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lifecycle</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccount.lifecycle_stage)}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contacts.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opps</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.opportunities.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Updated</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{timeAgo(selectedAccount.updated_at)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
+                      <div className="mt-3 space-y-2">
+                        {selectedAccountDetail.contacts.length ? selectedAccountDetail.contacts.map((contact) => (
+                          <div key={contact.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-neutral-900">{contact.full_name || contact.email || 'Unnamed contact'}</p>
+                              {contact.is_primary ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                  Primary
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {[contact.role, contact.email, contact.phone].filter(Boolean).join(' · ') || 'No contact details yet'}
+                            </p>
+                          </div>
+                        )) : (
+                          <p className="text-sm text-neutral-500">No contacts linked yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Recent Activity</p>
+                      <div className="mt-3 space-y-2">
+                        {selectedAccountDetail.activities.length ? selectedAccountDetail.activities.slice(0, 8).map((activity) => (
+                          <div key={activity.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-sm font-medium text-neutral-900">{timelineTypeLabel(activity.type)}</p>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {[activity.channel, timeAgo(activity.occurred_at)].filter(Boolean).join(' · ')}
+                            </p>
+                            {activity.subject ? (
+                              <p className="mt-2 text-sm text-neutral-700">{activity.subject}</p>
+                            ) : null}
+                            {activity.body ? (
+                              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{activity.body}</p>
+                            ) : null}
+                          </div>
+                        )) : (
+                          <p className="text-sm text-neutral-500">No CRM activity logged yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opportunities</p>
+                        <p className="mt-1 text-xs text-neutral-500">Move stages, review next actions, and keep booked or engaged deals from stalling.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {selectedAccountDetail.opportunities.length ? selectedAccountDetail.opportunities.map((opportunity) => (
+                        <div key={opportunity.id} className="rounded-xl border border-neutral-100 bg-neutral-50/80 p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-neutral-900">{formatStageLabel(opportunity.stage)}</p>
+                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                                  {opportunity.priority}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-neutral-500">
+                                {[opportunity.source, opportunity.last_activity_at ? `last activity ${timeAgo(opportunity.last_activity_at)}` : null].filter(Boolean).join(' · ')}
+                              </p>
+                            </div>
+                            <div className="text-xs text-neutral-500">
+                              {opportunity.next_step_due_at ? `Next due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date set'}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)_220px_auto]">
+                            <label className="space-y-2">
+                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Stage</span>
+                              <select
+                                value={opportunity.stage}
+                                onChange={(event) => {
+                                  void updateOpportunity(opportunity.id, { stage: event.target.value as CrmOpportunity['stage'] })
+                                }}
+                                disabled={savingOpportunityId === opportunity.id}
+                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                              >
+                                {opportunityStageOptions.map((stage) => (
+                                  <option key={stage} value={stage}>
+                                    {formatStageLabel(stage)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="space-y-2">
+                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Next Action</span>
+                              <input
+                                type="text"
+                                defaultValue={opportunity.next_step || ''}
+                                onBlur={(event) => {
+                                  const value = event.target.value.trim()
+                                  if (value === (opportunity.next_step || '')) return
+                                  void updateOpportunity(opportunity.id, { next_step: value || null })
+                                }}
+                                placeholder="Add the next action for this opportunity"
+                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                              />
+                            </label>
+
+                            <label className="space-y-2">
+                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Due</span>
+                              <input
+                                type="datetime-local"
+                                defaultValue={formatDateTimeInputValue(opportunity.next_step_due_at)}
+                                onBlur={(event) => {
+                                  const nextValue = parseDateTimeInputValue(event.target.value)
+                                  if ((opportunity.next_step_due_at || null) === nextValue) return
+                                  void updateOpportunity(opportunity.id, { next_step_due_at: nextValue })
+                                }}
+                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                              />
+                            </label>
+
+                            <div className="flex items-end">
+                              <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs text-neutral-500">
+                                {savingOpportunityId === opportunity.id ? 'Saving…' : 'Auto-saves on change'}
+                              </div>
+                            </div>
+                          </div>
+
+                          {opportunity.pain_summary ? (
+                            <p className="mt-3 text-sm text-neutral-600">{opportunity.pain_summary}</p>
+                          ) : null}
+                        </div>
+                      )) : (
+                        <p className="text-sm text-neutral-500">No opportunities linked to this account yet.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-neutral-500">
+                  {crmLoading ? 'Loading account details…' : 'Select an account to inspect pipeline detail.'}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       ) : activeTab === 'leadQuality' ? (
