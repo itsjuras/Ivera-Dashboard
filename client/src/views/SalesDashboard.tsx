@@ -251,6 +251,8 @@ interface CrmContact {
   is_primary: boolean
   contact_source: string | null
   status: string
+  email_suppressed: boolean
+  sms_suppressed: boolean
 }
 
 interface CrmOpportunity {
@@ -349,11 +351,32 @@ interface CrmTask {
   } | null
 }
 
+interface ContactCoverage {
+  total: number
+  active: number
+  suppressed: number
+  primary: number
+}
+
+interface TouchSummaryEntry {
+  type: string
+  count: number
+  last_at: string | null
+}
+
 interface CrmAccountDetail {
   account: CrmAccountSummary
   contacts: CrmContact[]
   opportunities: CrmOpportunity[]
   activities: CrmActivity[]
+  contact_coverage: ContactCoverage
+  touch_summary: TouchSummaryEntry[]
+}
+
+interface DuplicateGroup {
+  key: string
+  reason: 'domain' | 'name'
+  accounts: Array<{ id: string; name: string; domain: string | null; lifecycle_stage: string; status: string; updated_at: string }>
 }
 
 interface ProspectHistory {
@@ -1026,6 +1049,7 @@ export default function SalesDashboard() {
   const [taskDueBucket, setTaskDueBucket] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'no_date'>('all')
   const [reportingData, setReportingData] = useState<ReportingData | null>(null)
   const [lostReasonModal, setLostReasonModal] = useState<{ opportunityId: string; reason: string } | null>(null)
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
   const [opportunityComments, setOpportunityComments] = useState<Record<string, CrmComment[]>>({})
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [postingComment, setPostingComment] = useState<string | null>(null)
@@ -1554,6 +1578,13 @@ export default function SalesDashboard() {
     () => new Map(crmAccounts.map((account) => [account.id, account.name])),
     [crmAccounts],
   )
+  const duplicateGroupByAccountId = useMemo(() => {
+    const map = new Map<string, DuplicateGroup>()
+    for (const group of duplicateGroups) {
+      for (const acc of group.accounts) map.set(acc.id, group)
+    }
+    return map
+  }, [duplicateGroups])
   const openTasks = crmTasks
     .filter((task) => task.status === 'open')
     .sort((a, b) => {
@@ -1615,8 +1646,12 @@ export default function SalesDashboard() {
 
   async function refreshCrmAccounts() {
     if (!session?.access_token) return
-    const data = await salesRequest<{ accounts: CrmAccountSummary[] }>(session.access_token, '/accounts')
-    setCrmAccounts(data.accounts)
+    const [accountsData, dupeData] = await Promise.all([
+      salesRequest<{ accounts: CrmAccountSummary[] }>(session.access_token, '/accounts'),
+      salesRequest<{ duplicate_groups: DuplicateGroup[] }>(session.access_token, '/accounts/duplicates').catch(() => ({ duplicate_groups: [] })),
+    ])
+    setCrmAccounts(accountsData.accounts)
+    setDuplicateGroups(dupeData.duplicate_groups)
   }
 
   async function refreshSelectedAccountDetail(accountId = selectedAccountId) {
@@ -2607,14 +2642,53 @@ export default function SalesDashboard() {
 
               {selectedAccountDetail ? (
                 <div className="mt-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  {/* Duplicate warning */}
+                  {selectedAccountDetail.account.id && duplicateGroupByAccountId.has(selectedAccountDetail.account.id) ? (() => {
+                    const group = duplicateGroupByAccountId.get(selectedAccountDetail.account.id)!
+                    const others = group.accounts.filter((a) => a.id !== selectedAccountDetail.account.id)
+                    return (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Possible duplicate</p>
+                          <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-600">
+                            matched by {group.reason}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-amber-700">
+                          This account shares the same {group.reason} as:{' '}
+                          {others.map((a, i) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setSelectedAccountId(a.id)}
+                              className="font-semibold underline underline-offset-2"
+                            >
+                              {a.name}{i < others.length - 1 ? ', ' : ''}
+                            </button>
+                          ))}
+                          . Review and suppress the duplicate.
+                        </p>
+                      </div>
+                    )
+                  })() : null}
+
+                  {/* Stats row */}
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lifecycle</p>
                       <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccountDetail.account.lifecycle_stage)}</p>
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contacts.length}</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.total ?? selectedAccountDetail.contacts.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-600">Active</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.active ?? '—'}</p>
+                    </div>
+                    <div className={`rounded-lg border px-3 py-3 ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'border-red-100 bg-red-50/60' : 'border-neutral-100 bg-white/80'}`}>
+                      <p className={`text-[11px] uppercase tracking-[0.18em] ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>Suppressed</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.suppressed ?? '—'}</p>
                     </div>
                     <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opps</p>
@@ -2631,13 +2705,14 @@ export default function SalesDashboard() {
                       <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
                       <div className="mt-3 space-y-2">
                         {selectedAccountDetail.contacts.length ? selectedAccountDetail.contacts.map((contact) => (
-                          <div key={contact.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                          <div key={contact.id} className={`rounded-lg border px-3 py-3 ${contact.email_suppressed ? 'border-red-100 bg-red-50/40' : 'border-neutral-100 bg-neutral-50/80'}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-sm font-medium text-neutral-900">{contact.full_name || contact.email || 'Unnamed contact'}</p>
                               {contact.is_primary ? (
-                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
-                                  Primary
-                                </span>
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Primary</span>
+                              ) : null}
+                              {contact.email_suppressed ? (
+                                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-600">Suppressed</span>
                               ) : null}
                             </div>
                             <p className="mt-1 text-xs text-neutral-500">
@@ -2651,25 +2726,35 @@ export default function SalesDashboard() {
                     </div>
 
                     <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Recent Activity</p>
-                      <div className="mt-3 space-y-2">
-                        {selectedAccountDetail.activities.length ? selectedAccountDetail.activities.slice(0, 8).map((activity) => (
-                          <div key={activity.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
-                            <p className="text-sm font-medium text-neutral-900">{timelineTypeLabel(activity.type)}</p>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              {[activity.channel, timeAgo(activity.occurred_at)].filter(Boolean).join(' · ')}
-                            </p>
-                            {activity.subject ? (
-                              <p className="mt-2 text-sm text-neutral-700">{activity.subject}</p>
-                            ) : null}
-                            {activity.body ? (
-                              <p className="mt-1 text-xs leading-relaxed text-neutral-600">{activity.body}</p>
-                            ) : null}
-                          </div>
-                        )) : (
-                          <p className="text-sm text-neutral-500">No CRM activity logged yet.</p>
-                        )}
-                      </div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Touch History</p>
+                      {selectedAccountDetail.touch_summary?.length ? (
+                        <div className="mt-3 space-y-2">
+                          {selectedAccountDetail.touch_summary.map((entry) => (
+                            <div key={entry.type} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
+                              <span className="text-sm text-neutral-700">{timelineTypeLabel(entry.type)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-neutral-500">{entry.count}×</span>
+                                {entry.last_at ? <span className="text-[11px] text-neutral-400">{timeAgo(entry.last_at)}</span> : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {selectedAccountDetail.activities.length ? selectedAccountDetail.activities.slice(0, 8).map((activity) => (
+                            <div key={activity.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                              <p className="text-sm font-medium text-neutral-900">{timelineTypeLabel(activity.type)}</p>
+                              <p className="mt-1 text-xs text-neutral-500">
+                                {[activity.channel, timeAgo(activity.occurred_at)].filter(Boolean).join(' · ')}
+                              </p>
+                              {activity.subject ? <p className="mt-2 text-sm text-neutral-700">{activity.subject}</p> : null}
+                              {activity.body ? <p className="mt-1 text-xs leading-relaxed text-neutral-600">{activity.body}</p> : null}
+                            </div>
+                          )) : (
+                            <p className="text-sm text-neutral-500">No CRM activity logged yet.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
