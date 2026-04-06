@@ -1173,6 +1173,11 @@ export default function SalesDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
                   <XAxis
                     dataKey="day"
+                    interval={0}
+                    minTickGap={0}
+                    height={56}
+                    angle={-35}
+                    textAnchor="end"
                     tick={{ fontSize: 12, fill: '#a3a3a3' }}
                     axisLine={{ stroke: '#e5e5e5' }}
                     tickLine={false}
