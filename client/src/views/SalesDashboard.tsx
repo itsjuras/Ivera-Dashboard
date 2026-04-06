@@ -66,6 +66,8 @@ interface PortalStats {
       leads_saved?: number
       sent?: number
       send_errors?: number
+      report_status?: string
+      report_error_message?: string
       warmup_limit?: number | null
       reached_warmup_limit?: boolean
       reached_run_target?: boolean
@@ -267,6 +269,12 @@ function buildFunnelSummary(
     .map(([label, value]) => `${label} ${value}`)
 
   return parts.length ? parts.join(' → ') : null
+}
+
+function reportStatusLabel(status: string | undefined, error: string | undefined) {
+  if (status === 'sent') return 'Report sent'
+  if (status === 'failed') return error ? `Report failed: ${error}` : 'Report failed'
+  return 'Report status unavailable'
 }
 
 function buildLiveRunProgress(
@@ -1219,6 +1227,9 @@ export default function SalesDashboard() {
                     target {latestRunDiagnostics.requested_leads ?? '—'} · effective {latestRunDiagnostics.effective_run_limit ?? '—'}
                   </p>
                 </div>
+                <p className="mt-3 text-xs text-neutral-500">
+                  {reportStatusLabel(latestRunDiagnostics.report_status, latestRunDiagnostics.report_error_message)}
+                </p>
                 <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
                   <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
                     <p className="text-[11px] tracking-widest uppercase text-neutral-400">Raw</p>
@@ -1725,6 +1736,23 @@ export default function SalesDashboard() {
                       <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
                         <p className="text-[11px] tracking-widest uppercase text-neutral-400">No Email</p>
                         <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedRun.funnel_diagnostics.no_email_found ?? '—'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Report Delivery</p>
+                        <p className="mt-1 text-sm font-medium text-neutral-900">
+                          {reportStatusLabel(
+                            selectedRun.funnel_diagnostics.report_status,
+                            selectedRun.funnel_diagnostics.report_error_message,
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Follow-Up Sequence</p>
+                        <p className="mt-1 text-sm text-neutral-700">
+                          Touch 2 on day 4 with email + SMS, then touches 3–6 by email on days 11, 25, 39, and 53.
+                        </p>
                       </div>
                     </div>
                     {selectedRun.funnel_diagnostics.search_passes?.length ? (
