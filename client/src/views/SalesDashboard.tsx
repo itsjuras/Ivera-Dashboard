@@ -53,6 +53,8 @@ interface PortalStats {
   campaigns: Array<{
     id: string
     product_name: string
+    campaign_name?: string | null
+    campaign_definition_id?: string | null
     target_description: string
     created_at: string
     status?: string
@@ -274,6 +276,11 @@ function formatScheduledRun(date: Date | null) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date)
+}
+
+function formatCampaignRunTitle(run: PortalStats['campaigns'][number]) {
+  if (run.campaign_name) return run.campaign_name
+  return run.product_name || 'Campaign run'
 }
 
 function buildFunnelSummary(
@@ -822,8 +829,8 @@ export default function SalesDashboard() {
     () => {
       const rows = campaigns.slice(0, 8).map((campaign) => ({
         id: campaign.id,
-        title: campaign.product_name || 'Campaign run',
-        meta: formatRunDate(campaign.created_at),
+        title: formatCampaignRunTitle(campaign),
+        meta: `${formatRunDate(campaign.created_at)} · ${campaign.product_name}`,
         badge: `${campaign.total_leads || 0} leads`,
         detail: buildFunnelSummary(campaign.funnel_diagnostics) || undefined,
         metrics: [
@@ -1146,6 +1153,17 @@ export default function SalesDashboard() {
 
   async function handleCampaignAction(definitionId: string, action: 'pause' | 'restart' | 'archive') {
     if (!session?.access_token) return
+    const actionLabel = action === 'pause' ? 'pause' : action === 'restart' ? 'restart' : 'archive'
+    const confirmationMessage = action === 'archive'
+      ? 'Archive this campaign? It will be hidden from active use until you restore it later in code.'
+      : action === 'restart'
+        ? 'Restart this campaign now? This starts a fresh run using the saved campaign settings.'
+        : 'Pause this campaign? Any active run linked to it will be stopped.'
+
+    if (typeof window !== 'undefined' && !window.confirm(confirmationMessage)) {
+      return
+    }
+
     setSavingCampaign(true)
     setAdminActionError(null)
     setAdminActionMessage(null)
@@ -1154,10 +1172,10 @@ export default function SalesDashboard() {
       const data = await salesRequest<{ message: string }>(session.access_token, `/campaigns/${definitionId}/${action}`, {
         method: 'POST',
       })
-      setAdminActionMessage(data.message || `Campaign ${action}ed.`)
+      setAdminActionMessage(data.message || `Campaign ${actionLabel}d.`)
       await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
-      setAdminActionError(err instanceof Error ? err.message : `Failed to ${action} campaign.`)
+      setAdminActionError(err instanceof Error ? err.message : `Failed to ${actionLabel} campaign.`)
     } finally {
       setSavingCampaign(false)
     }
@@ -1617,10 +1635,10 @@ export default function SalesDashboard() {
                         }}
                         role="button"
                         tabIndex={0}
-                        className={`rounded-xl border px-4 py-4 text-left transition ${
+                        className={`rounded-2xl border px-4 py-4 text-left transition ${
                           selectedCampaignId === campaign.id
-                            ? 'border-neutral-900 bg-neutral-50'
-                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300'
+                            ? 'border-neutral-900 bg-neutral-50 shadow-sm'
+                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
                         }`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1634,9 +1652,17 @@ export default function SalesDashboard() {
                               ) : null}
                             </div>
                             <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
-                            <p className="mt-2 text-xs text-neutral-500">
-                              {campaign.num_leads_per_run} leads/run · {campaign.total_runs || 0} runs · {campaign.last_run_at ? `last run ${timeAgo(campaign.last_run_at)}` : 'never run'}
-                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
+                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                {campaign.num_leads_per_run} leads/run
+                              </span>
+                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                {campaign.total_runs || 0} runs
+                              </span>
+                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                {campaign.last_run_at ? `last run ${timeAgo(campaign.last_run_at)}` : 'never run'}
+                              </span>
+                            </div>
                           </div>
                           <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
                             {campaign.status}
@@ -1991,10 +2017,10 @@ export default function SalesDashboard() {
               <div>
                 <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Run</p>
                 <h3 className="mt-1 text-lg font-semibold text-neutral-900">
-                  {selectedRun.product_name || 'Campaign run'}
+                  {formatCampaignRunTitle(selectedRun)}
                 </h3>
                 <p className="mt-1 text-sm text-neutral-500">
-                  {formatRunDate(selectedRun.created_at)} · {selectedRun.total_leads || 0} leads
+                  {formatRunDate(selectedRun.created_at)} · {selectedRun.product_name} · {selectedRun.total_leads || 0} leads
                 </p>
               </div>
               <button
