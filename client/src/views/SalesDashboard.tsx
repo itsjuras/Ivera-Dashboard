@@ -360,6 +360,7 @@ type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'leadQuality' | 'prospects'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
+type PipelineView = 'board' | 'workspace'
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
   const h = Math.floor(diff / 3600000)
@@ -960,10 +961,13 @@ export default function SalesDashboard() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [selectedAccountDetail, setSelectedAccountDetail] = useState<CrmAccountDetail | null>(null)
   const [crmTasks, setCrmTasks] = useState<CrmTask[]>([])
+  const [crmOpportunities, setCrmOpportunities] = useState<CrmOpportunity[]>([])
   const [crmLoading, setCrmLoading] = useState(false)
   const [crmError, setCrmError] = useState<string | null>(null)
   const [savingOpportunityId, setSavingOpportunityId] = useState<string | null>(null)
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null)
+  const [pipelineView, setPipelineView] = useState<PipelineView>('board')
+  const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('all')
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1032,6 +1036,7 @@ export default function SalesDashboard() {
       setSelectedAccountId(null)
       setSelectedAccountDetail(null)
       setCrmTasks([])
+      setCrmOpportunities([])
       return
     }
 
@@ -1049,6 +1054,24 @@ export default function SalesDashboard() {
       })
       .finally(() => {
         if (!cancelled) setCrmLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  useEffect(() => {
+    if (!session?.access_token) return
+
+    let cancelled = false
+
+    salesRequest<{ opportunities: CrmOpportunity[] }>(session.access_token, '/opportunities')
+      .then((data) => {
+        if (!cancelled) setCrmOpportunities(data.opportunities)
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setCrmError(err.message)
       })
 
     return () => {
@@ -1363,6 +1386,7 @@ export default function SalesDashboard() {
       void refreshCampaignDefinitions()
       void refreshCrmAccounts()
       void refreshCrmTasks()
+      void refreshCrmOpportunities()
       void refreshSelectedAccountDetail()
     }, 10000)
 
@@ -1381,6 +1405,7 @@ export default function SalesDashboard() {
       void refreshCampaignDefinitions()
       void refreshCrmAccounts()
       void refreshCrmTasks()
+      void refreshCrmOpportunities()
       void refreshSelectedAccountDetail()
     }
 
@@ -1458,6 +1483,10 @@ export default function SalesDashboard() {
     { label: 'Booked', value: overviewSummary.booked, hint: 'Booked prospects in window' },
   ]
   const selectedAccount = selectedAccountDetail?.account ?? null
+  const accountNameById = useMemo(
+    () => new Map(crmAccounts.map((account) => [account.id, account.name])),
+    [crmAccounts],
+  )
   const openTasks = crmTasks
     .filter((task) => task.status === 'open')
     .sort((a, b) => {
@@ -1468,6 +1497,16 @@ export default function SalesDashboard() {
   const hotQueueTasks = openTasks.filter(isHotQueueTask)
   const myOpenTasks = user?.id ? openTasks.filter((task) => task.owner_user_id === user.id) : []
   const unassignedOpenTasks = openTasks.filter((task) => !task.owner_user_id)
+  const pipelineStages = opportunityStageOptions
+  const filteredPipelineOpportunities = crmOpportunities.filter((opportunity) => {
+    if (pipelineStageFilter !== 'all' && opportunity.stage !== pipelineStageFilter) return false
+    if (selectedAccountId && pipelineView === 'workspace' && opportunity.account_id !== selectedAccountId) return false
+    return true
+  })
+  const pipelineBoard = pipelineStages.map((stage) => ({
+    stage,
+    opportunities: filteredPipelineOpportunities.filter((opportunity) => opportunity.stage === stage),
+  }))
   const crmAccountRows = crmAccounts.map((account) => ({
     id: account.id,
     title: account.name,
@@ -1512,6 +1551,12 @@ export default function SalesDashboard() {
     if (!session?.access_token) return
     const data = await salesRequest<{ tasks: CrmTask[] }>(session.access_token, '/tasks?status=open')
     setCrmTasks(data.tasks)
+  }
+
+  async function refreshCrmOpportunities() {
+    if (!session?.access_token) return
+    const data = await salesRequest<{ opportunities: CrmOpportunity[] }>(session.access_token, '/opportunities')
+    setCrmOpportunities(data.opportunities)
   }
 
   async function handleRunCampaign(definitionId: string) {
@@ -1674,7 +1719,7 @@ export default function SalesDashboard() {
         method: 'PATCH',
         body: JSON.stringify(updates),
       })
-      await Promise.all([refreshStats(), refreshCrmAccounts(), refreshSelectedAccountDetail()])
+      await Promise.all([refreshStats(), refreshCrmAccounts(), refreshCrmOpportunities(), refreshSelectedAccountDetail()])
     } catch (err) {
       setCrmError(err instanceof Error ? err.message : 'Failed to update opportunity.')
     } finally {
@@ -1693,7 +1738,7 @@ export default function SalesDashboard() {
         method: 'PATCH',
         body: JSON.stringify(updates),
       })
-      await Promise.all([refreshCrmTasks(), refreshCrmAccounts(), refreshSelectedAccountDetail()])
+      await Promise.all([refreshCrmTasks(), refreshCrmAccounts(), refreshCrmOpportunities(), refreshSelectedAccountDetail()])
     } catch (err) {
       setCrmError(err instanceof Error ? err.message : 'Failed to update task.')
     } finally {
@@ -2048,6 +2093,53 @@ export default function SalesDashboard() {
       ) : activeTab === 'pipeline' ? (
         <div className="space-y-4">
           <MetricSection title="Pipeline" icon={CalendarCheck} metrics={pipelineMetrics} />
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Pipeline Views</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  See every deal in a board, or switch to the account workspace when you want to work one account deeply.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 lg:items-end">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPipelineView('board')}
+                    className={tabButtonClass(pipelineView === 'board')}
+                  >
+                    Board View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPipelineView('workspace')}
+                    className={tabButtonClass(pipelineView === 'workspace')}
+                  >
+                    Account Workspace
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPipelineStageFilter('all')}
+                    className={tabButtonClass(pipelineStageFilter === 'all')}
+                  >
+                    All Stages
+                  </button>
+                  {pipelineStages.map((stage) => (
+                    <button
+                      key={stage}
+                      type="button"
+                      onClick={() => setPipelineStageFilter(stage)}
+                      className={tabButtonClass(pipelineStageFilter === stage)}
+                    >
+                      {formatStageLabel(stage)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-xl border border-red-200/70 bg-red-50/60 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -2213,10 +2305,71 @@ export default function SalesDashboard() {
               )}
             </div>
           </div>
+          {pipelineView === 'board' ? (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-neutral-900">Opportunity Board</h3>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    A stage-by-stage view of the whole pipeline. Click a deal to jump into its account workspace.
+                  </p>
+                </div>
+                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                  {filteredPipelineOpportunities.length} visible
+                </span>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <div className="grid min-w-[1200px] grid-cols-8 gap-3">
+                  {pipelineBoard.map((column) => (
+                    <div key={column.stage} className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">{formatStageLabel(column.stage)}</p>
+                        <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                          {column.opportunities.length}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {column.opportunities.length ? (
+                          column.opportunities.map((opportunity) => (
+                            <button
+                              key={opportunity.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAccountId(opportunity.account_id)
+                                setPipelineView('workspace')
+                              }}
+                              className="w-full rounded-xl border border-neutral-100 bg-white px-3 py-3 text-left transition hover:bg-neutral-50"
+                            >
+                              <p className="text-sm font-medium text-neutral-900">
+                                {accountNameById.get(opportunity.account_id) || 'Account'}
+                              </p>
+                              <p className="mt-1 text-xs text-neutral-500">
+                                {[opportunity.priority, opportunity.source].filter(Boolean).join(' · ') || 'Opportunity'}
+                              </p>
+                              {opportunity.next_step ? (
+                                <p className="mt-2 text-xs leading-relaxed text-neutral-600">{opportunity.next_step}</p>
+                              ) : null}
+                              <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
+                                {opportunity.next_step_due_at ? `Due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date'}
+                              </p>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-neutral-200 bg-white/60 px-3 py-6 text-center text-xs text-neutral-400">
+                            No deals
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
             <ListCard
               title="Accounts"
-              subtitle="Tracked companies now linked into the CRM layer"
+              subtitle={pipelineView === 'workspace' ? 'Choose the account you want to work right now' : 'Tracked companies now linked into the CRM layer'}
               rows={crmAccountRows}
               emptyLabel={crmLoading ? 'Loading accounts' : 'No tracked accounts yet'}
               onRowClick={(id) => setSelectedAccountId(id)}
