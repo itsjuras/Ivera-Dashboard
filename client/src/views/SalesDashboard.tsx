@@ -1080,7 +1080,6 @@ export default function SalesDashboard() {
             product_context: editingCampaign.product_context,
             target_description: editingCampaign.target_description,
             num_leads_per_run: editingCampaign.num_leads_per_run,
-            is_default: true,
           }),
         },
       )
@@ -1089,6 +1088,28 @@ export default function SalesDashboard() {
       await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to save campaign.')
+    } finally {
+      setSavingCampaign(false)
+    }
+  }
+
+  async function setDefaultCampaign(definitionId: string) {
+    if (!session?.access_token) return
+    setSavingCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ campaign: CampaignDefinition; message: string }>(
+        session.access_token,
+        `/campaigns/${definitionId}/default`,
+        { method: 'POST' },
+      )
+      setSelectedCampaignId(data.campaign.id)
+      setAdminActionMessage(data.message || 'Default campaign updated.')
+      await Promise.all([refreshStats(), refreshCampaignDefinitions()])
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to update default campaign.')
     } finally {
       setSavingCampaign(false)
     }
@@ -1639,6 +1660,17 @@ export default function SalesDashboard() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation()
+                              void setDefaultCampaign(campaign.id)
+                            }}
+                            disabled={savingCampaign || campaign.is_default || campaign.status === 'archived'}
+                            className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Set Default
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
                               void handleCampaignAction(campaign.id, 'pause')
                             }}
                             disabled={savingCampaign}
@@ -1833,6 +1865,14 @@ export default function SalesDashboard() {
                         className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {savingCampaign ? 'Saving...' : 'Save Campaign'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void setDefaultCampaign(selectedCampaignDefinition.id)}
+                        disabled={savingCampaign || selectedCampaignDefinition.is_default || selectedCampaignDefinition.status === 'archived'}
+                        className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {selectedCampaignDefinition.is_default ? 'Default Campaign' : 'Set Default'}
                       </button>
                       <button
                         type="button"
