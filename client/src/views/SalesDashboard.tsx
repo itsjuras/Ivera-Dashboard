@@ -1198,6 +1198,12 @@ export default function SalesDashboard() {
     open_opportunities: 0,
     engaged_opportunities: 0,
     meetings_booked: 0,
+    total_pipeline: 0,
+    total_won: 0,
+    won_opps: 0,
+    lost_opps: 0,
+    win_rate: null,
+    avg_deal_size: null,
   }
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
