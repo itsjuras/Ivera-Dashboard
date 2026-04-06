@@ -50,6 +50,15 @@ interface PortalStats {
     booked: number
     unsubscribed: number
   }>
+  followUpPerformance?: Array<{
+    branch: 'clicked' | 'opened' | 'cold' | 'replied_later'
+    sent: number
+    leads: number
+    replied: number
+    booked: number
+    bounced: number
+    unsubscribed: number
+  }>
   campaigns: Array<{
     id: string
     product_name: string
@@ -220,6 +229,11 @@ function leadWithinDays(iso: string, days: number) {
 function replyRate(replied: number, emailed: number) {
   if (!emailed) return '—'
   return `${((replied / emailed) * 100).toFixed(1)}%`
+}
+
+function branchLabel(branch: string) {
+  if (branch === 'replied_later') return 'Replied Later'
+  return branch.charAt(0).toUpperCase() + branch.slice(1)
 }
 
 function bookingRate(booked: number, emailed: number) {
@@ -834,6 +848,7 @@ export default function SalesDashboard() {
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
+  const followUpPerformance = stats?.followUpPerformance ?? []
   const campaigns = stats?.campaigns ?? []
   const selectedCampaignDefinition = useMemo(
     () => campaignDefinitions.find((campaign) => campaign.id === selectedCampaignId) ?? null,
@@ -1576,6 +1591,51 @@ export default function SalesDashboard() {
                         <p key={action} className="text-sm text-neutral-700">
                           {action}
                         </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {followUpPerformance.length ? (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white/75 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Follow-Up Branch Performance</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          How each engagement branch is performing across tracked follow-up touches for this workspace
+                        </p>
+                      </div>
+                      <p className="text-xs text-neutral-400">{followUpPerformance.reduce((sum, branch) => sum + branch.sent, 0)} follow-up sends tracked</p>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {followUpPerformance.map((branch) => (
+                        <div key={branch.branch} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3">
+                          <div className="grid min-w-[640px] grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.8fr))] gap-2 text-sm">
+                          <div>
+                            <p className="font-medium text-neutral-900">{branchLabel(branch.branch)}</p>
+                            <p className="mt-1 text-xs text-neutral-500">{branch.leads} leads in branch</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.sent}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.replied}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.booked}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.bounced}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 font-medium text-neutral-900">{replyRate(branch.replied, branch.leads)}</p>
+                          </div>
+                        </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -2324,6 +2384,43 @@ export default function SalesDashboard() {
                             <p key={action} className="text-sm text-neutral-700">
                               {action}
                             </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {followUpPerformance.length ? (
+                      <div className="mt-4 rounded-lg border border-neutral-100 bg-white px-3 py-3">
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Workspace Follow-Up Branch Performance</p>
+                        <div className="mt-3 space-y-2">
+                          {followUpPerformance.map((branch) => (
+                            <div key={`modal-${branch.branch}`} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3">
+                              <div className="grid min-w-[620px] grid-cols-[minmax(0,1.1fr)_repeat(5,minmax(0,0.75fr))] gap-2 text-sm">
+                              <div>
+                                <p className="font-medium text-neutral-900">{branchLabel(branch.branch)}</p>
+                                <p className="mt-1 text-xs text-neutral-500">{branch.leads} leads tracked</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
+                                <p className="mt-1 font-medium text-neutral-900">{branch.sent}</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                                <p className="mt-1 font-medium text-neutral-900">{branch.replied}</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                                <p className="mt-1 font-medium text-neutral-900">{branch.booked}</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
+                                <p className="mt-1 font-medium text-neutral-900">{branch.bounced}</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                                <p className="mt-1 font-medium text-neutral-900">{replyRate(branch.replied, branch.leads)}</p>
+                              </div>
+                            </div>
+                            </div>
                           ))}
                         </div>
                       </div>
