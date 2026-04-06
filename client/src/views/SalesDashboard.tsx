@@ -288,8 +288,10 @@ interface ReportingSummary {
 }
 
 interface ReportingData {
-  summary: ReportingSummary
+  summary: ReportingSummary & { forecast_total: number }
   funnel: Array<{ stage: string; count: number }>
+  conversion_rates: Array<{ from: string; to: string; rate: number | null }>
+  forecast: Record<string, { count: number; pipeline: number; weighted: number; probability: number }>
   by_stage: Record<string, { count: number; amount: number }>
   by_campaign: Array<{ campaign: string; count: number; amount: number; won: number; lost: number; won_amount: number }>
   lost_reasons: Record<string, number>
@@ -3000,9 +3002,10 @@ export default function SalesDashboard() {
       ) : activeTab === 'reporting' ? (
         <div className="space-y-4">
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             {[
               { label: 'Open Pipeline', value: reportingData ? `$${Number(reportingData.summary.total_pipeline).toLocaleString()}` : (crm.total_pipeline ? `$${Number(crm.total_pipeline).toLocaleString()}` : '—'), hint: 'Estimated value of open deals' },
+              { label: 'Weighted Forecast', value: reportingData?.summary.forecast_total ? `$${Number(reportingData.summary.forecast_total).toLocaleString()}` : '—', hint: 'Pipeline × stage probability' },
               { label: 'Revenue Won', value: reportingData ? `$${Number(reportingData.summary.total_won).toLocaleString()}` : (crm.total_won ? `$${Number(crm.total_won).toLocaleString()}` : '—'), hint: 'Closed-won total' },
               { label: 'Win Rate', value: reportingData?.summary.win_rate != null ? `${reportingData.summary.win_rate}%` : (crm.win_rate != null ? `${crm.win_rate}%` : '—'), hint: 'Won ÷ (won + lost)' },
               { label: 'Avg Deal Size', value: reportingData?.summary.avg_deal_size ? `$${Number(reportingData.summary.avg_deal_size).toLocaleString()}` : (crm.avg_deal_size ? `$${Number(crm.avg_deal_size).toLocaleString()}` : '—'), hint: 'Among closed-won deals' },
@@ -3044,6 +3047,66 @@ export default function SalesDashboard() {
                     )
                   })
                 })()}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Conversion rates */}
+          {reportingData?.conversion_rates.length ? (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Stage Conversion Rates</h3>
+              <p className="mt-1 text-xs text-neutral-500">Percentage of deals that advanced from one stage to the next.</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {reportingData.conversion_rates.map((row) => (
+                  <div key={`${row.from}-${row.to}`} className="flex items-center gap-2 rounded-lg border border-neutral-100 bg-white/80 px-3 py-2.5">
+                    <span className="text-xs text-neutral-500">{formatStageLabel(row.from)}</span>
+                    <span className="text-[10px] text-neutral-300">→</span>
+                    <span className="text-xs text-neutral-500">{formatStageLabel(row.to)}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                      row.rate == null ? 'bg-neutral-100 text-neutral-400'
+                      : row.rate >= 60 ? 'bg-emerald-50 text-emerald-700'
+                      : row.rate >= 30 ? 'bg-amber-50 text-amber-700'
+                      : 'bg-red-50 text-red-600'
+                    }`}>
+                      {row.rate != null ? `${row.rate}%` : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Forecast breakdown by stage */}
+          {reportingData?.forecast && Object.keys(reportingData.forecast).length > 0 ? (
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Forecast Breakdown</h3>
+              <p className="mt-1 text-xs text-neutral-500">Weighted pipeline using standard stage close probabilities.</p>
+              <div className="mt-4 space-y-2">
+                {STAGE_ORDER.filter((s) => reportingData.forecast[s]).map((stage) => {
+                  const row = reportingData.forecast[stage]
+                  return (
+                    <div key={stage} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-white/80 px-3 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-neutral-700">{formatStageLabel(stage)}</span>
+                        <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-neutral-500">
+                          {Math.round(row.probability * 100)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-right">
+                        <span className="text-xs text-neutral-400">${Number(row.pipeline).toLocaleString()} pipeline</span>
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-emerald-700">
+                          ${Math.round(row.weighted).toLocaleString()} forecast
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="flex items-center justify-between rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2.5">
+                  <span className="text-sm font-semibold text-white">Total Forecast</span>
+                  <span className="text-sm font-semibold text-white">
+                    ${Number(reportingData.summary.forecast_total).toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
           ) : null}
