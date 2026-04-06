@@ -162,6 +162,29 @@ interface CampaignDefinition {
   active_run_id?: string | null
 }
 
+interface CampaignAnalytics {
+  definitionId: string
+  totalRuns: number
+  sent: number
+  replied: number
+  booked: number
+  bounced: number
+  unsubscribed: number
+  branchMix: {
+    clicked: number
+    opened: number
+    cold: number
+    replied_later: number
+  }
+  sourceMix: {
+    exa: number
+    scraped: number
+    pattern: number
+  }
+  latestRun: PortalStats['campaigns'][number] | null
+  healthScore: number
+}
+
 interface ProspectHistory {
   lead: {
     id: string
@@ -234,6 +257,86 @@ function replyRate(replied: number, emailed: number) {
 function branchLabel(branch: string) {
   if (branch === 'replied_later') return 'Replied Later'
   return branch.charAt(0).toUpperCase() + branch.slice(1)
+}
+
+function buildCampaignAnalytics(
+  definition: CampaignDefinition,
+  runs: PortalStats['campaigns'],
+): CampaignAnalytics | null {
+  const scopedRuns = runs
+    .filter((run) => run.campaign_definition_id === definition.id)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  if (!scopedRuns.length) return null
+
+  const totals = scopedRuns.reduce(
+    (acc, run) => {
+      acc.sent += run.emailed || 0
+      acc.replied += run.replied || 0
+      acc.booked += run.booked || 0
+      acc.bounced += run.bounced || 0
+      acc.unsubscribed += run.unsubscribed || 0
+      acc.branchMix.clicked += run.funnel_diagnostics?.follow_up_branches?.clicked ?? 0
+      acc.branchMix.opened += run.funnel_diagnostics?.follow_up_branches?.opened ?? 0
+      acc.branchMix.cold += run.funnel_diagnostics?.follow_up_branches?.cold ?? 0
+      acc.branchMix.replied_later += run.funnel_diagnostics?.follow_up_branches?.replied_later ?? 0
+      acc.sourceMix.exa += run.funnel_diagnostics?.email_sources?.exa ?? 0
+      acc.sourceMix.scraped += run.funnel_diagnostics?.email_sources?.scraped ?? 0
+      acc.sourceMix.pattern += run.funnel_diagnostics?.email_sources?.pattern ?? 0
+      return acc
+    },
+    {
+      sent: 0,
+      replied: 0,
+      booked: 0,
+      bounced: 0,
+      unsubscribed: 0,
+      branchMix: { clicked: 0, opened: 0, cold: 0, replied_later: 0 },
+      sourceMix: { exa: 0, scraped: 0, pattern: 0 },
+    },
+  )
+
+  const sent = totals.sent || 0
+  const replyRateValue = sent > 0 ? totals.replied / sent : 0
+  const bounceRateValue = sent > 0 ? totals.bounced / sent : 0
+  const unsubscribeRateValue = sent > 0 ? totals.unsubscribed / sent : 0
+  const bookedRateValue = sent > 0 ? totals.booked / sent : 0
+  const patternShare = sent > 0 ? totals.sourceMix.pattern / Math.max(1, totals.sourceMix.exa + totals.sourceMix.scraped + totals.sourceMix.pattern) : 0
+  const healthScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        72
+          + bookedRateValue * 40
+          + replyRateValue * 25
+          - bounceRateValue * 45
+          - unsubscribeRateValue * 20
+          - patternShare * 10,
+      ),
+    ),
+  )
+
+  return {
+    definitionId: definition.id,
+    totalRuns: scopedRuns.length,
+    sent: totals.sent,
+    replied: totals.replied,
+    booked: totals.booked,
+    bounced: totals.bounced,
+    unsubscribed: totals.unsubscribed,
+    branchMix: totals.branchMix,
+    sourceMix: totals.sourceMix,
+    latestRun: scopedRuns[0] ?? null,
+    healthScore,
+  }
+}
+
+function healthTone(score: number) {
+  if (score >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (score >= 65) return 'text-blue-700 bg-blue-50 border-blue-200'
+  if (score >= 50) return 'text-amber-700 bg-amber-50 border-amber-200'
+  return 'text-red-700 bg-red-50 border-red-200'
 }
 
 function bookingRate(booked: number, emailed: number) {
@@ -850,9 +953,23 @@ export default function SalesDashboard() {
   const leadActivitySeries = stats?.leadActivity ?? []
   const followUpPerformance = stats?.followUpPerformance ?? []
   const campaigns = stats?.campaigns ?? []
+  const campaignAnalyticsByDefinition = useMemo(() => {
+    const entries = campaignDefinitions
+      .map((definition) => {
+        const analytics = buildCampaignAnalytics(definition, campaigns)
+        return analytics ? [definition.id, analytics] : null
+      })
+      .filter((entry): entry is [string, CampaignAnalytics] => Boolean(entry))
+
+    return new Map(entries)
+  }, [campaignDefinitions, campaigns])
   const selectedCampaignDefinition = useMemo(
     () => campaignDefinitions.find((campaign) => campaign.id === selectedCampaignId) ?? null,
     [campaignDefinitions, selectedCampaignId],
+  )
+  const selectedCampaignAnalytics = useMemo(
+    () => (selectedCampaignId ? campaignAnalyticsByDefinition.get(selectedCampaignId) ?? null : null),
+    [campaignAnalyticsByDefinition, selectedCampaignId],
   )
 
   useEffect(() => {
@@ -1855,53 +1972,105 @@ export default function SalesDashboard() {
                   <p className="mt-4 text-sm text-neutral-500">Loading campaigns...</p>
                 ) : (
                   <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                    {campaignDefinitions.map((campaign) => (
-                      <div
-                        key={campaign.id}
-                        onClick={() => setSelectedCampaignId(campaign.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            setSelectedCampaignId(campaign.id)
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        className={`rounded-2xl border px-4 py-4 text-left transition ${
-                          selectedCampaignId === campaign.id
-                            ? 'border-neutral-900 bg-neutral-50 shadow-sm'
-                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
-                              {campaign.is_default ? (
-                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
-                                  Default
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
-                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
-                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
-                                {campaign.num_leads_per_run} leads/run
-                              </span>
-                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
-                                {campaign.total_runs || 0} runs
-                              </span>
-                              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
-                                {campaign.last_run_at ? `last run ${timeAgo(campaign.last_run_at)}` : 'never run'}
-                              </span>
-                            </div>
-                          </div>
-                          <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
-                            {campaign.status}
-                          </span>
-                        </div>
+                    {campaignDefinitions.map((campaign) => {
+                      const analytics = campaignAnalyticsByDefinition.get(campaign.id)
+                      const topBranch = analytics
+                        ? [
+                            { label: 'clicked', count: analytics.branchMix.clicked },
+                            { label: 'opened', count: analytics.branchMix.opened },
+                            { label: 'cold', count: analytics.branchMix.cold },
+                            { label: 'replied later', count: analytics.branchMix.replied_later },
+                          ].sort((a, b) => b.count - a.count)[0]
+                        : null
+                      const sourceEntries = analytics
+                        ? [
+                            { label: 'Exa', count: analytics.sourceMix.exa },
+                            { label: 'Scraped', count: analytics.sourceMix.scraped },
+                            { label: 'Pattern', count: analytics.sourceMix.pattern },
+                          ].filter((entry) => entry.count > 0).sort((a, b) => b.count - a.count)
+                        : []
 
-                        <div className="mt-4 flex flex-wrap gap-2">
+                      return (
+                        <div
+                          key={campaign.id}
+                          onClick={() => setSelectedCampaignId(campaign.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              setSelectedCampaignId(campaign.id)
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          className={`rounded-2xl border px-4 py-4 text-left transition ${
+                            selectedCampaignId === campaign.id
+                              ? 'border-neutral-900 bg-neutral-50 shadow-sm'
+                              : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
+                                {campaign.is_default ? (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
+                              <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
+                                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                  {campaign.num_leads_per_run} leads/run
+                                </span>
+                                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                  {campaign.total_runs || 0} runs
+                                </span>
+                                <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1">
+                                  {campaign.last_run_at ? `last run ${timeAgo(campaign.last_run_at)}` : 'never run'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
+                              {campaign.status}
+                            </span>
+                          </div>
+
+                          {analytics ? (
+                            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                              <div className={`rounded-xl border px-3 py-3 ${healthTone(analytics.healthScore)}`}>
+                                <p className="text-[10px] uppercase tracking-[0.18em]">Health</p>
+                                <p className="mt-1 text-lg font-semibold">{analytics.healthScore}/100</p>
+                                <p className="mt-1 text-[11px]">
+                                  {replyRate(analytics.replied, analytics.sent)} reply · {analytics.sent ? `${Math.round((analytics.bounced / analytics.sent) * 100)}%` : '—'} bounce
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3">
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">Top Branch</p>
+                                <p className="mt-1 text-sm font-semibold text-neutral-900">
+                                  {topBranch && topBranch.count > 0 ? `${topBranch.label} ${topBranch.count}` : 'No follow-ups yet'}
+                                </p>
+                                <p className="mt-1 text-[11px] text-neutral-500">
+                                  {analytics.latestRun ? `Latest run ${formatRunDate(analytics.latestRun.created_at)}` : 'Waiting for first run'}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3">
+                                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">Source Mix</p>
+                                <p className="mt-1 text-sm font-semibold text-neutral-900">
+                                  {sourceEntries.length ? sourceEntries.map((entry) => `${entry.label} ${entry.count}`).join(' · ') : 'No source data yet'}
+                                </p>
+                                <p className="mt-1 text-[11px] text-neutral-500">
+                                  {analytics.totalRuns} tracked runs · {analytics.sent} sent
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-xl border border-dashed border-neutral-200 bg-white/70 px-3 py-3 text-sm text-neutral-500">
+                              No run analytics yet. Start this campaign to build branch and source performance history.
+                            </div>
+                          )}
+
+                          <div className="mt-4 flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={(event) => {
@@ -1961,9 +2130,10 @@ export default function SalesDashboard() {
                             <Archive size={11} />
                             Archive
                           </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
 
@@ -2045,7 +2215,7 @@ export default function SalesDashboard() {
                         <p className="text-[11px] tracking-widest uppercase text-neutral-400">Selected Campaign</p>
                         <h4 className="mt-1 text-sm font-semibold text-neutral-900">{selectedCampaignDefinition.name}</h4>
                         <p className="mt-1 text-xs text-neutral-500">
-                          {selectedCampaignDefinition.is_default ? 'Default campaign config' : 'Save here to make this the new default config'}
+                          {selectedCampaignDefinition.is_default ? 'Default campaign config' : 'Save changes here, then use Set Default only if you want this campaign to become the default'}
                         </p>
                       </div>
                       <label className="space-y-2">
@@ -2084,6 +2254,79 @@ export default function SalesDashboard() {
                         />
                       </label>
                     </div>
+
+                    {selectedCampaignAnalytics ? (
+                      <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Analytics</p>
+                            <p className="mt-1 text-sm text-neutral-700">
+                              All tracked runs: {selectedCampaignAnalytics.totalRuns} · latest run {selectedCampaignAnalytics.latestRun ? formatRunDate(selectedCampaignAnalytics.latestRun.created_at) : '—'}
+                            </p>
+                          </div>
+                          <div className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${healthTone(selectedCampaignAnalytics.healthScore)}`}>
+                            Health {selectedCampaignAnalytics.healthScore}/100
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-2 md:grid-cols-4">
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{replyRate(selectedCampaignAnalytics.replied, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.replied} replies from {selectedCampaignAnalytics.sent} sent</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{bookingRate(selectedCampaignAnalytics.booked, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.booked} booked</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounce Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{selectedCampaignAnalytics.sent ? `${Math.round((selectedCampaignAnalytics.bounced / selectedCampaignAnalytics.sent) * 100)}%` : '—'}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.bounced} bounced</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsub Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{unsubscribeRate(selectedCampaignAnalytics.unsubscribed, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.unsubscribed} unsubscribed</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Branch Mix</p>
+                            <div className="mt-3 space-y-2">
+                              {([
+                                ['clicked', selectedCampaignAnalytics.branchMix.clicked],
+                                ['opened', selectedCampaignAnalytics.branchMix.opened],
+                                ['cold', selectedCampaignAnalytics.branchMix.cold],
+                                ['replied_later', selectedCampaignAnalytics.branchMix.replied_later],
+                              ] as const).map(([branch, count]) => (
+                                <div key={branch} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-2">
+                                  <span className="text-sm font-medium text-neutral-700">{branchLabel(branch)}</span>
+                                  <span className="text-sm text-neutral-900">{count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Source Mix</p>
+                            <div className="mt-3 space-y-2">
+                              {([
+                                ['Exa', selectedCampaignAnalytics.sourceMix.exa],
+                                ['Scraped', selectedCampaignAnalytics.sourceMix.scraped],
+                                ['Pattern', selectedCampaignAnalytics.sourceMix.pattern],
+                              ] as const).map(([label, count]) => (
+                                <div key={label} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-2">
+                                  <span className="text-sm font-medium text-neutral-700">{label}</span>
+                                  <span className="text-sm text-neutral-900">{count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <label className="mt-3 block space-y-2">
                       <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Name</span>
