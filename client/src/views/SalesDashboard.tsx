@@ -1269,7 +1269,7 @@ export default function SalesDashboard() {
     setSelectedAccountId((current) => (
       current && crmAccounts.some((account) => account.id === current)
         ? current
-        : crmAccounts[0].id
+        : null
     ))
   }, [crmAccounts])
 
