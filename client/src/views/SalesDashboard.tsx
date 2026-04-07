@@ -186,6 +186,10 @@ interface CampaignDefinition {
   last_run_at?: string | null
   last_run_status?: string | null
   active_run_id?: string | null
+  sender_name?: string | null
+  sender_email?: string | null
+  reply_to_email?: string | null
+  cal_booking_url?: string | null
 }
 
 interface CampaignAnalytics {
@@ -1358,6 +1362,10 @@ export default function SalesDashboard() {
       product_context: selectedCampaignDefinition.product_context,
       target_description: selectedCampaignDefinition.target_description,
       num_leads_per_run: selectedCampaignDefinition.num_leads_per_run,
+      sender_name: selectedCampaignDefinition.sender_name ?? null,
+      sender_email: selectedCampaignDefinition.sender_email ?? null,
+      reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
+      cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
     })
   }, [selectedCampaignDefinition])
 
@@ -1844,6 +1852,10 @@ export default function SalesDashboard() {
             product_context: editingCampaign.product_context,
             target_description: editingCampaign.target_description,
             num_leads_per_run: editingCampaign.num_leads_per_run,
+            sender_name: editingCampaign.sender_name ?? null,
+            sender_email: editingCampaign.sender_email ?? null,
+            reply_to_email: editingCampaign.reply_to_email ?? null,
+            cal_booking_url: editingCampaign.cal_booking_url ?? null,
           }),
         },
       )

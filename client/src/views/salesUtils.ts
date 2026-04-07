@@ -33,6 +33,10 @@ export interface CampaignDefinition {
   last_run_at?: string | null
   last_run_status?: string | null
   active_run_id?: string | null
+  sender_name?: string | null
+  sender_email?: string | null
+  reply_to_email?: string | null
+  cal_booking_url?: string | null
 }
 
 export interface CampaignAnalytics {

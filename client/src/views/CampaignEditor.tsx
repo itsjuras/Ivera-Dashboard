@@ -663,6 +663,54 @@ export default function CampaignEditor({
                   />
                 </label>
 
+                {/* Sender settings */}
+                <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
+                  <p className="text-[11px] tracking-widests uppercase text-neutral-400">Sender Settings</p>
+                  <p className="mt-1 text-xs text-neutral-500">Overrides the default sender for this campaign. Leave blank to use the client-level defaults.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widests uppercase text-neutral-400">Sender Name</span>
+                      <input
+                        type="text"
+                        value={editingCampaign.sender_name ?? ''}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, sender_name: event.target.value || null } : current))}
+                        placeholder="e.g. Alex from Ivera"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widests uppercase text-neutral-400">Sender Email</span>
+                      <input
+                        type="email"
+                        value={editingCampaign.sender_email ?? ''}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, sender_email: event.target.value || null } : current))}
+                        placeholder="e.g. alex@ivera.ca"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widests uppercase text-neutral-400">Reply-To Email</span>
+                      <input
+                        type="email"
+                        value={editingCampaign.reply_to_email ?? ''}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, reply_to_email: event.target.value || null } : current))}
+                        placeholder="Defaults to sender email"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widests uppercase text-neutral-400">Booking URL</span>
+                      <input
+                        type="url"
+                        value={editingCampaign.cal_booking_url ?? ''}
+                        onChange={(event) => setEditingCampaign((current) => (current ? { ...current, cal_booking_url: event.target.value || null } : current))}
+                        placeholder="e.g. https://cal.com/yourname"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
