@@ -2132,6 +2132,8 @@ export default function SalesDashboard() {
         </Suspense>
       ) : null}
 
+      {viewMode === 'dashboard' ? (
+      <>
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -2862,486 +2864,13 @@ export default function SalesDashboard() {
               </div>
             </div>
           ) : null}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-            <ListCard
-              title="Accounts"
-              subtitle={pipelineView === 'workspace' ? 'Choose the account you want to work right now' : 'Tracked companies now linked into the CRM layer'}
-              rows={crmAccountRows}
-              emptyLabel={crmLoading ? 'Loading accounts' : 'No tracked accounts yet'}
-              onRowClick={(id) => setSelectedAccountId(id)}
-            />
-
-            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-neutral-100 p-2">
-                  <Building2 size={16} className="text-neutral-600" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-neutral-900">
-                    {selectedAccount?.name || 'Account detail'}
-                  </h3>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {selectedAccount
-                      ? [selectedAccount.domain, selectedAccount.geo, selectedAccount.segment].filter(Boolean).join(' · ') || 'Tracked account'
-                      : 'Select an account to inspect linked contacts, opportunities, and recent CRM activity.'}
-                  </p>
-                </div>
-              </div>
-
-              {crmError ? (
-                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{crmError}</p>
-              ) : null}
-
-              {selectedAccountDetail ? (
-                <div className="mt-4 space-y-4">
-                  {/* Duplicate warning */}
-                  {selectedAccountDetail.account.id && duplicateGroupByAccountId.has(selectedAccountDetail.account.id) ? (() => {
-                    const group = duplicateGroupByAccountId.get(selectedAccountDetail.account.id)!
-                    const others = group.accounts.filter((a) => a.id !== selectedAccountDetail.account.id)
-                    return (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Possible duplicate</p>
-                          <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-600">
-                            matched by {group.reason}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-amber-700">
-                          This account shares the same {group.reason} as:{' '}
-                          {others.map((a, i) => (
-                            <button
-                              key={a.id}
-                              type="button"
-                              onClick={() => setSelectedAccountId(a.id)}
-                              className="font-semibold underline underline-offset-2"
-                            >
-                              {a.name}{i < others.length - 1 ? ', ' : ''}
-                            </button>
-                          ))}
-                          . Review and suppress the duplicate.
-                        </p>
-                      </div>
-                    )
-                  })() : null}
-
-                  {/* Stats row */}
-                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lifecycle</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccountDetail.account.lifecycle_stage)}</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.total ?? selectedAccountDetail.contacts.length}</p>
-                    </div>
-                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-600">Active</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.active ?? '—'}</p>
-                    </div>
-                    <div className={`rounded-lg border px-3 py-3 ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'border-red-100 bg-red-50/60' : 'border-neutral-100 bg-white/80'}`}>
-                      <p className={`text-[11px] uppercase tracking-[0.18em] ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>Suppressed</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.suppressed ?? '—'}</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opps</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.opportunities.length}</p>
-                    </div>
-                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Updated</p>
-                      <p className="mt-1 text-sm font-semibold text-neutral-900">{timeAgo(selectedAccountDetail.account.updated_at)}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
-                      <div className="mt-3 space-y-2">
-                        {selectedAccountDetail.contacts.length ? selectedAccountDetail.contacts.map((contact) => (
-                          <div key={contact.id} className={`rounded-lg border px-3 py-3 ${contact.email_suppressed ? 'border-red-100 bg-red-50/40' : 'border-neutral-100 bg-neutral-50/80'}`}>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-medium text-neutral-900">{contact.full_name || contact.email || 'Unnamed contact'}</p>
-                              {contact.is_primary ? (
-                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Primary</span>
-                              ) : null}
-                              {contact.email_suppressed ? (
-                                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-600">Suppressed</span>
-                              ) : null}
-                            </div>
-                            <p className="mt-1 text-xs text-neutral-500">
-                              {[contact.role, contact.email, contact.phone].filter(Boolean).join(' · ') || 'No contact details yet'}
-                            </p>
-                          </div>
-                        )) : (
-                          <p className="text-sm text-neutral-500">No contacts linked yet.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Touch History</p>
-                      {selectedAccountDetail.touch_summary?.length ? (
-                        <div className="mt-3 space-y-2">
-                          {selectedAccountDetail.touch_summary.map((entry) => (
-                            <div key={entry.type} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
-                              <span className="text-sm text-neutral-700">{timelineTypeLabel(entry.type)}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-neutral-500">{entry.count}×</span>
-                                {entry.last_at ? <span className="text-[11px] text-neutral-400">{timeAgo(entry.last_at)}</span> : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-3 space-y-2">
-                          {selectedAccountDetail.activities.length ? selectedAccountDetail.activities.slice(0, 8).map((activity) => (
-                            <div key={activity.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
-                              <p className="text-sm font-medium text-neutral-900">{timelineTypeLabel(activity.type)}</p>
-                              <p className="mt-1 text-xs text-neutral-500">
-                                {[activity.channel, timeAgo(activity.occurred_at)].filter(Boolean).join(' · ')}
-                              </p>
-                              {activity.subject ? <p className="mt-2 text-sm text-neutral-700">{activity.subject}</p> : null}
-                              {activity.body ? <p className="mt-1 text-xs leading-relaxed text-neutral-600">{activity.body}</p> : null}
-                            </div>
-                          )) : (
-                            <p className="text-sm text-neutral-500">No CRM activity logged yet.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opportunities</p>
-                        <p className="mt-1 text-xs text-neutral-500">Move stages, review next actions, and keep booked or engaged deals from stalling.</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      {selectedAccountDetail.opportunities.length ? selectedAccountDetail.opportunities.map((opportunity) => {
-                        const si = stageIndex(opportunity.stage)
-                        const isTerminal = opportunity.stage === 'won' || opportunity.stage === 'lost'
-                        const showQualification = si >= stageIndex('qualified') || !!opportunity.qualified_summary || !!opportunity.pain_summary
-                        const showAmount = si >= stageIndex('proposal') || opportunity.amount_estimate != null
-                        const showProposal = si >= stageIndex('proposal') || !!opportunity.proposal_sent_at || opportunity.proposal_status !== 'none'
-
-                        return (
-                        <div key={opportunity.id} className={`rounded-xl border p-4 ${opportunity.stage === 'won' ? 'border-emerald-200 bg-emerald-50/60' : opportunity.stage === 'lost' ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100 bg-neutral-50/80'}`}>
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-neutral-900">{formatStageLabel(opportunity.stage)}</p>
-                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
-                                  {opportunity.priority}
-                                </span>
-                                {opportunity.amount_estimate != null ? (
-                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
-                                    ${Number(opportunity.amount_estimate).toLocaleString()}
-                                  </span>
-                                ) : null}
-                                {opportunity.stage === 'won' && opportunity.won_at ? (
-                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
-                                    Won {timeAgo(opportunity.won_at)}
-                                  </span>
-                                ) : null}
-                                {opportunity.stage === 'lost' && opportunity.lost_reason ? (
-                                  <span className="rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
-                                    {opportunity.lost_reason}
-                                  </span>
-                                ) : null}
-                                {/* Ownership state */}
-                                {opportunity.owner_user_id ? (
-                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
-                                    Human active
-                                  </span>
-                                ) : (
-                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-violet-600">
-                                    AI active
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 text-xs text-neutral-500">
-                                {[opportunity.source, opportunity.last_activity_at ? `last activity ${timeAgo(opportunity.last_activity_at)}` : null].filter(Boolean).join(' · ')}
-                              </p>
-                            </div>
-                            <div className="text-xs text-neutral-500">
-                              {isTerminal
-                                ? (opportunity.stage === 'won' ? 'Closed won' : 'Closed lost')
-                                : opportunity.next_step_due_at ? `Next due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date set'}
-                            </div>
-                          </div>
-
-                          <div className="mt-4 grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)_220px_auto]">
-                            <label className="space-y-2">
-                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Stage</span>
-                              <select
-                                value={opportunity.stage}
-                                onChange={(event) => {
-                                  const newStage = event.target.value
-                                  if (newStage === 'lost') {
-                                    setLostReasonModal({ opportunityId: opportunity.id, reason: '' })
-                                    return
-                                  }
-                                  const warning = stageExitWarning(newStage, opportunity)
-                                  if (warning) {
-                                    setStageExitModal({ opportunityId: opportunity.id, toStage: newStage, warning })
-                                    // Reset select visually — the actual update waits for confirmation
-                                    event.target.value = opportunity.stage
-                                    return
-                                  }
-                                  const updates: Record<string, string | null> = { stage: newStage }
-                                  if (newStage === 'won') updates.won_at = new Date().toISOString()
-                                  void updateOpportunity(opportunity.id, updates as Parameters<typeof updateOpportunity>[1])
-                                }}
-                                disabled={savingOpportunityId === opportunity.id}
-                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
-                              >
-                                {opportunityStageOptions.map((stage) => (
-                                  <option key={stage} value={stage}>
-                                    {formatStageLabel(stage)}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="space-y-2">
-                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Next Action</span>
-                              <input
-                                type="text"
-                                defaultValue={opportunity.next_step || ''}
-                                onBlur={(event) => {
-                                  const value = event.target.value.trim()
-                                  if (value === (opportunity.next_step || '')) return
-                                  void updateOpportunity(opportunity.id, { next_step: value || null })
-                                }}
-                                placeholder="Add the next action for this opportunity"
-                                disabled={isTerminal}
-                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                              />
-                            </label>
-
-                            <label className="space-y-2">
-                              <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Due</span>
-                              <input
-                                type="datetime-local"
-                                defaultValue={formatDateTimeInputValue(opportunity.next_step_due_at)}
-                                onBlur={(event) => {
-                                  const nextValue = parseDateTimeInputValue(event.target.value)
-                                  if ((opportunity.next_step_due_at || null) === nextValue) return
-                                  void updateOpportunity(opportunity.id, { next_step_due_at: nextValue })
-                                }}
-                                disabled={isTerminal}
-                                className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                              />
-                            </label>
-
-                            <div className="flex flex-col gap-2 items-end justify-end">
-                              <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs text-neutral-500">
-                                {savingOpportunityId === opportunity.id ? 'Saving…' : 'Auto-saves on change'}
-                              </div>
-                              {user?.id && !isTerminal ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void updateOpportunity(opportunity.id, {
-                                    owner_user_id: opportunity.owner_user_id ? null : user.id,
-                                  } as Parameters<typeof updateOpportunity>[1])}
-                                  disabled={savingOpportunityId === opportunity.id}
-                                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:opacity-50 ${opportunity.owner_user_id ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}
-                                >
-                                  {opportunity.owner_user_id ? 'Hand to AI' : 'Take over'}
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          {showAmount ? (
-                            <div className="mt-3">
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Deal Amount ($)</span>
-                                <input
-                                  type="number"
-                                  defaultValue={opportunity.amount_estimate ?? ''}
-                                  onBlur={(event) => {
-                                    const raw = event.target.value.trim()
-                                    const val = raw ? parseFloat(raw) : null
-                                    if (val === opportunity.amount_estimate) return
-                                    void updateOpportunity(opportunity.id, { amount_estimate: val } as Parameters<typeof updateOpportunity>[1])
-                                  }}
-                                  placeholder="Estimated deal value"
-                                  disabled={isTerminal}
-                                  className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                />
-                              </label>
-                            </div>
-                          ) : null}
-
-                          {showProposal ? (
-                            <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Status</span>
-                                <select
-                                  value={opportunity.proposal_status || 'none'}
-                                  onChange={(event) => {
-                                    void updateOpportunity(opportunity.id, { proposal_status: event.target.value } as Parameters<typeof updateOpportunity>[1])
-                                  }}
-                                  disabled={isTerminal}
-                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                >
-                                  {['none', 'draft', 'sent', 'viewed', 'accepted', 'declined'].map((s) => (
-                                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Sent</span>
-                                <input
-                                  type="datetime-local"
-                                  defaultValue={formatDateTimeInputValue(opportunity.proposal_sent_at)}
-                                  onBlur={(event) => {
-                                    const next = parseDateTimeInputValue(event.target.value)
-                                    if ((opportunity.proposal_sent_at || null) === next) return
-                                    void updateOpportunity(opportunity.id, { proposal_sent_at: next } as Parameters<typeof updateOpportunity>[1])
-                                  }}
-                                  disabled={isTerminal}
-                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                />
-                              </label>
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Closed Amount ($)</span>
-                                <input
-                                  type="number"
-                                  defaultValue={opportunity.closed_amount ?? ''}
-                                  onBlur={(event) => {
-                                    const raw = event.target.value.trim()
-                                    const val = raw ? parseFloat(raw) : null
-                                    if (val === opportunity.closed_amount) return
-                                    void updateOpportunity(opportunity.id, { closed_amount: val } as Parameters<typeof updateOpportunity>[1])
-                                  }}
-                                  placeholder="Final closed value"
-                                  disabled={!isTerminal}
-                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                />
-                              </label>
-                            </div>
-                          ) : null}
-
-                          {showQualification ? (
-                            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Qualification Summary</span>
-                                <textarea
-                                  defaultValue={opportunity.qualified_summary || ''}
-                                  onBlur={(event) => {
-                                    const value = event.target.value.trim()
-                                    if (value === (opportunity.qualified_summary || '')) return
-                                    void updateOpportunity(opportunity.id, { qualified_summary: value || null })
-                                  }}
-                                  placeholder="Why is this a good fit? Budget, authority, need, timeline…"
-                                  rows={3}
-                                  disabled={isTerminal}
-                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                />
-                              </label>
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Pain / Need</span>
-                                <textarea
-                                  defaultValue={opportunity.pain_summary || ''}
-                                  onBlur={(event) => {
-                                    const value = event.target.value.trim()
-                                    if (value === (opportunity.pain_summary || '')) return
-                                    void updateOpportunity(opportunity.id, { pain_summary: value || null })
-                                  }}
-                                  placeholder="What problem are they trying to solve?"
-                                  rows={3}
-                                  disabled={isTerminal}
-                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                />
-                              </label>
-                            </div>
-                          ) : null}
-
-                          {opportunity.stage === 'lost' && !opportunity.lost_reason ? (
-                            <div className="mt-3">
-                              <label className="space-y-2">
-                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lost Reason</span>
-                                <select
-                                  defaultValue=""
-                                  onChange={(event) => {
-                                    if (event.target.value) void updateOpportunity(opportunity.id, { lost_reason: event.target.value })
-                                  }}
-                                  className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
-                                >
-                                  <option value="" disabled>Select a reason…</option>
-                                  {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                                </select>
-                              </label>
-                            </div>
-                          ) : null}
-
-                          {/* Internal notes */}
-                          <div className="mt-4 border-t border-neutral-100 pt-4">
-                            <div className="flex items-center justify-between">
-                              <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Internal Notes</p>
-                              {!opportunityComments[opportunity.id] ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void loadComments(opportunity.id)}
-                                  className="text-[11px] text-neutral-400 underline underline-offset-2 hover:text-neutral-600"
-                                >
-                                  Load notes
-                                </button>
-                              ) : null}
-                            </div>
-
-                            {opportunityComments[opportunity.id] ? (
-                              <div className="mt-2 space-y-2">
-                                {opportunityComments[opportunity.id].length ? (
-                                  opportunityComments[opportunity.id].map((comment) => (
-                                    <div key={comment.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
-                                      <p className="text-sm text-neutral-800">{comment.body}</p>
-                                      <p className="mt-1 text-[11px] text-neutral-400">{timeAgo(comment.created_at)}</p>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p className="text-sm text-neutral-400">No notes yet.</p>
-                                )}
-                                <div className="flex gap-2 pt-1">
-                                  <input
-                                    type="text"
-                                    value={commentDrafts[opportunity.id] || ''}
-                                    onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [opportunity.id]: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void postComment(opportunity.id) } }}
-                                    placeholder="Add a note…"
-                                    disabled={postingComment === opportunity.id}
-                                    className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => void postComment(opportunity.id)}
-                                    disabled={postingComment === opportunity.id || !(commentDrafts[opportunity.id] || '').trim()}
-                                    className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-40"
-                                  >
-                                    {postingComment === opportunity.id ? '…' : 'Post'}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      )})
- : (
-                        <p className="text-sm text-neutral-500">No opportunities linked to this account yet.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-neutral-500">
-                  {crmLoading ? 'Loading account details…' : 'Select an account to inspect pipeline detail.'}
-                </p>
-              )}
-            </div>
-          </div>
+          <ListCard
+            title="Accounts"
+            subtitle={pipelineView === 'workspace' ? 'Choose the account you want to work right now' : 'Tracked companies now linked into the CRM layer'}
+            rows={crmAccountRows}
+            emptyLabel={crmLoading ? 'Loading accounts' : 'No tracked accounts yet'}
+            onRowClick={(id) => { setSelectedAccountId(id); setPipelineView('workspace') }}
+          />
         </div>
       ) : activeTab === 'reporting' ? (
         <div className="space-y-4">
@@ -3825,6 +3354,8 @@ export default function SalesDashboard() {
           )}
         </div>
       )}
+      </>
+      ) : null}
       {selectedLeadId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
           <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
@@ -3894,6 +3425,338 @@ export default function SalesDashboard() {
           </div>
         </div>
       )}
+
+      {selectedAccountId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-950/45 px-4 py-8"
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedAccountId(null) }}
+        >
+          <div className="relative my-auto w-full max-w-3xl rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-neutral-100 p-2">
+                  <Building2 size={16} className="text-neutral-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-neutral-900">
+                    {selectedAccount?.name || 'Account detail'}
+                  </h3>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {selectedAccount
+                      ? [selectedAccount.domain, selectedAccount.geo, selectedAccount.segment].filter(Boolean).join(' · ') || 'Tracked account'
+                      : 'Loading account…'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAccountId(null)}
+                className="rounded-full border border-neutral-200 p-2 text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {crmError ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{crmError}</p>
+              ) : null}
+
+              {selectedAccountDetail ? (
+                <div className="space-y-4">
+                  {selectedAccountDetail.account.id && duplicateGroupByAccountId.has(selectedAccountDetail.account.id) ? (() => {
+                    const group = duplicateGroupByAccountId.get(selectedAccountDetail.account.id)!
+                    const others = group.accounts.filter((a) => a.id !== selectedAccountDetail.account.id)
+                    return (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                        <div className="flex items-start gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Possible duplicate</p>
+                          <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-amber-600">
+                            matched by {group.reason}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-amber-700">
+                          This account shares the same {group.reason} as:{' '}
+                          {others.map((a, i) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setSelectedAccountId(a.id)}
+                              className="font-semibold underline underline-offset-2"
+                            >
+                              {a.name}{i < others.length - 1 ? ', ' : ''}
+                            </button>
+                          ))}
+                          . Review and suppress the duplicate.
+                        </p>
+                      </div>
+                    )
+                  })() : null}
+
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lifecycle</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{formatStageLabel(selectedAccountDetail.account.lifecycle_stage)}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.total ?? selectedAccountDetail.contacts.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-600">Active</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.active ?? '—'}</p>
+                    </div>
+                    <div className={`rounded-lg border px-3 py-3 ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'border-red-100 bg-red-50/60' : 'border-neutral-100 bg-white/80'}`}>
+                      <p className={`text-[11px] uppercase tracking-[0.18em] ${(selectedAccountDetail.contact_coverage?.suppressed ?? 0) > 0 ? 'text-red-500' : 'text-neutral-400'}`}>Suppressed</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.contact_coverage?.suppressed ?? '—'}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opps</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{selectedAccountDetail.opportunities.length}</p>
+                    </div>
+                    <div className="rounded-lg border border-neutral-100 bg-white/80 px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Updated</p>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{timeAgo(selectedAccountDetail.account.updated_at)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Contacts</p>
+                      <div className="mt-3 space-y-2">
+                        {selectedAccountDetail.contacts.length ? selectedAccountDetail.contacts.map((contact) => (
+                          <div key={contact.id} className={`rounded-lg border px-3 py-3 ${contact.email_suppressed ? 'border-red-100 bg-red-50/40' : 'border-neutral-100 bg-neutral-50/80'}`}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium text-neutral-900">{contact.full_name || contact.email || 'Unnamed contact'}</p>
+                              {contact.is_primary ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Primary</span>
+                              ) : null}
+                              {contact.email_suppressed ? (
+                                <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-red-600">Suppressed</span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500">
+                              {[contact.role, contact.email, contact.phone].filter(Boolean).join(' · ') || 'No contact details yet'}
+                            </p>
+                          </div>
+                        )) : (
+                          <p className="text-sm text-neutral-500">No contacts linked yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Touch History</p>
+                      {selectedAccountDetail.touch_summary?.length ? (
+                        <div className="mt-3 space-y-2">
+                          {selectedAccountDetail.touch_summary.map((entry) => (
+                            <div key={entry.type} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2.5">
+                              <span className="text-sm text-neutral-700">{timelineTypeLabel(entry.type)}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-neutral-500">{entry.count}×</span>
+                                {entry.last_at ? <span className="text-[11px] text-neutral-400">{timeAgo(entry.last_at)}</span> : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {selectedAccountDetail.activities.length ? selectedAccountDetail.activities.slice(0, 8).map((activity) => (
+                            <div key={activity.id} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                              <p className="text-sm font-medium text-neutral-900">{timelineTypeLabel(activity.type)}</p>
+                              <p className="mt-1 text-xs text-neutral-500">
+                                {[activity.channel, timeAgo(activity.occurred_at)].filter(Boolean).join(' · ')}
+                              </p>
+                              {activity.subject ? <p className="mt-2 text-sm text-neutral-700">{activity.subject}</p> : null}
+                              {activity.body ? <p className="mt-1 text-xs leading-relaxed text-neutral-600">{activity.body}</p> : null}
+                            </div>
+                          )) : (
+                            <p className="text-sm text-neutral-500">No CRM activity logged yet.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Opportunities</p>
+                    <p className="mt-1 text-xs text-neutral-500">Move stages, review next actions, and keep booked or engaged deals from stalling.</p>
+                    <div className="mt-4 space-y-3">
+                      {selectedAccountDetail.opportunities.length ? selectedAccountDetail.opportunities.map((opportunity) => {
+                        const si = stageIndex(opportunity.stage)
+                        const isTerminal = opportunity.stage === 'won' || opportunity.stage === 'lost'
+                        const showQualification = si >= stageIndex('qualified') || !!opportunity.qualified_summary || !!opportunity.pain_summary
+                        const showAmount = si >= stageIndex('proposal') || opportunity.amount_estimate != null
+                        const showProposal = si >= stageIndex('proposal') || !!opportunity.proposal_sent_at || opportunity.proposal_status !== 'none'
+                        return (
+                          <div key={opportunity.id} className={`rounded-xl border p-4 ${opportunity.stage === 'won' ? 'border-emerald-200 bg-emerald-50/60' : opportunity.stage === 'lost' ? 'border-neutral-200 bg-neutral-50/60' : 'border-neutral-100 bg-neutral-50/80'}`}>
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-neutral-900">{formatStageLabel(opportunity.stage)}</p>
+                                  <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-neutral-500">{opportunity.priority}</span>
+                                  {opportunity.amount_estimate != null ? (
+                                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                                      ${Number(opportunity.amount_estimate).toLocaleString()}
+                                    </span>
+                                  ) : null}
+                                  {opportunity.owner_user_id ? (
+                                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">Human active</span>
+                                  ) : (
+                                    <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-violet-600">AI active</span>
+                                  )}
+                                </div>
+                                <p className="mt-1 text-xs text-neutral-500">
+                                  {[opportunity.source, opportunity.last_activity_at ? `last activity ${timeAgo(opportunity.last_activity_at)}` : null].filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                              <div className="text-xs text-neutral-500">
+                                {isTerminal
+                                  ? (opportunity.stage === 'won' ? 'Closed won' : 'Closed lost')
+                                  : opportunity.next_step_due_at ? `Next due ${formatRunDate(opportunity.next_step_due_at)}` : 'No due date set'}
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)_220px_auto]">
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Stage</span>
+                                <select
+                                  value={opportunity.stage}
+                                  onChange={(event) => {
+                                    const newStage = event.target.value
+                                    if (newStage === 'lost') { setLostReasonModal({ opportunityId: opportunity.id, reason: '' }); return }
+                                    const warning = stageExitWarning(newStage, opportunity)
+                                    if (warning) { setStageExitModal({ opportunityId: opportunity.id, toStage: newStage, warning }); event.target.value = opportunity.stage; return }
+                                    const updates: Record<string, string | null> = { stage: newStage }
+                                    if (newStage === 'won') updates.won_at = new Date().toISOString()
+                                    void updateOpportunity(opportunity.id, updates as Parameters<typeof updateOpportunity>[1])
+                                  }}
+                                  disabled={savingOpportunityId === opportunity.id}
+                                  className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                                >
+                                  {opportunityStageOptions.map((stage) => (
+                                    <option key={stage} value={stage}>{formatStageLabel(stage)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Next Action</span>
+                                <input type="text" defaultValue={opportunity.next_step || ''} onBlur={(event) => { const value = event.target.value.trim(); if (value === (opportunity.next_step || '')) return; void updateOpportunity(opportunity.id, { next_step: value || null }) }} placeholder="Add the next action for this opportunity" disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                              </label>
+                              <label className="space-y-2">
+                                <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Due</span>
+                                <input type="datetime-local" defaultValue={formatDateTimeInputValue(opportunity.next_step_due_at)} onBlur={(event) => { const nextValue = parseDateTimeInputValue(event.target.value); if ((opportunity.next_step_due_at || null) === nextValue) return; void updateOpportunity(opportunity.id, { next_step_due_at: nextValue }) }} disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                              </label>
+                              <div className="flex flex-col gap-2 items-end justify-end">
+                                <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs text-neutral-500">
+                                  {savingOpportunityId === opportunity.id ? 'Saving…' : 'Auto-saves on change'}
+                                </div>
+                                {user?.id && !isTerminal ? (
+                                  <button type="button" onClick={() => void updateOpportunity(opportunity.id, { owner_user_id: opportunity.owner_user_id ? null : user.id } as Parameters<typeof updateOpportunity>[1])} disabled={savingOpportunityId === opportunity.id} className={`rounded-xl border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:opacity-50 ${opportunity.owner_user_id ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
+                                    {opportunity.owner_user_id ? 'Hand to AI' : 'Take over'}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {showAmount ? (
+                              <div className="mt-3">
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Deal Amount ($)</span>
+                                  <input type="number" defaultValue={opportunity.amount_estimate ?? ''} onBlur={(event) => { const raw = event.target.value.trim(); const val = raw ? parseFloat(raw) : null; if (val === opportunity.amount_estimate) return; void updateOpportunity(opportunity.id, { amount_estimate: val } as Parameters<typeof updateOpportunity>[1]) }} placeholder="Estimated deal value" disabled={isTerminal} className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                </label>
+                              </div>
+                            ) : null}
+
+                            {showProposal ? (
+                              <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Status</span>
+                                  <select value={opportunity.proposal_status || 'none'} onChange={(event) => { void updateOpportunity(opportunity.id, { proposal_status: event.target.value } as Parameters<typeof updateOpportunity>[1]) }} disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50">
+                                    {['none', 'draft', 'sent', 'viewed', 'accepted', 'declined'].map((s) => (
+                                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Proposal Sent</span>
+                                  <input type="datetime-local" defaultValue={formatDateTimeInputValue(opportunity.proposal_sent_at)} onBlur={(event) => { const next = parseDateTimeInputValue(event.target.value); if ((opportunity.proposal_sent_at || null) === next) return; void updateOpportunity(opportunity.id, { proposal_sent_at: next } as Parameters<typeof updateOpportunity>[1]) }} disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Closed Amount ($)</span>
+                                  <input type="number" defaultValue={opportunity.closed_amount ?? ''} onBlur={(event) => { const raw = event.target.value.trim(); const val = raw ? parseFloat(raw) : null; if (val === opportunity.closed_amount) return; void updateOpportunity(opportunity.id, { closed_amount: val } as Parameters<typeof updateOpportunity>[1]) }} placeholder="Final closed value" disabled={!isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                </label>
+                              </div>
+                            ) : null}
+
+                            {showQualification ? (
+                              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Qualification Summary</span>
+                                  <textarea defaultValue={opportunity.qualified_summary || ''} onBlur={(event) => { const value = event.target.value.trim(); if (value === (opportunity.qualified_summary || '')) return; void updateOpportunity(opportunity.id, { qualified_summary: value || null }) }} placeholder="Why is this a good fit? Budget, authority, need, timeline…" rows={3} disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Pain / Need</span>
+                                  <textarea defaultValue={opportunity.pain_summary || ''} onBlur={(event) => { const value = event.target.value.trim(); if (value === (opportunity.pain_summary || '')) return; void updateOpportunity(opportunity.id, { pain_summary: value || null }) }} placeholder="What problem are they trying to solve?" rows={3} disabled={isTerminal} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                </label>
+                              </div>
+                            ) : null}
+
+                            {opportunity.stage === 'lost' && !opportunity.lost_reason ? (
+                              <div className="mt-3">
+                                <label className="space-y-2">
+                                  <span className="block text-[11px] uppercase tracking-[0.18em] text-neutral-400">Lost Reason</span>
+                                  <select defaultValue="" onChange={(event) => { if (event.target.value) void updateOpportunity(opportunity.id, { lost_reason: event.target.value }) }} className="w-full max-w-xs rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400">
+                                    <option value="" disabled>Select a reason…</option>
+                                    {LOST_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                                  </select>
+                                </label>
+                              </div>
+                            ) : null}
+
+                            <div className="mt-4 border-t border-neutral-100 pt-4">
+                              <div className="flex items-center justify-between">
+                                <p className="text-[11px] uppercase tracking-[0.18em] text-neutral-400">Internal Notes</p>
+                                {!opportunityComments[opportunity.id] ? (
+                                  <button type="button" onClick={() => void loadComments(opportunity.id)} className="text-[11px] text-neutral-400 underline underline-offset-2 hover:text-neutral-600">Load notes</button>
+                                ) : null}
+                              </div>
+                              {opportunityComments[opportunity.id] ? (
+                                <div className="mt-2 space-y-2">
+                                  {opportunityComments[opportunity.id].length ? opportunityComments[opportunity.id].map((comment) => (
+                                    <div key={comment.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5">
+                                      <p className="text-sm text-neutral-800">{comment.body}</p>
+                                      <p className="mt-1 text-[11px] text-neutral-400">{timeAgo(comment.created_at)}</p>
+                                    </div>
+                                  )) : (
+                                    <p className="text-sm text-neutral-400">No notes yet.</p>
+                                  )}
+                                  <div className="flex gap-2 pt-1">
+                                    <input type="text" value={commentDrafts[opportunity.id] || ''} onChange={(e) => setCommentDrafts((prev) => ({ ...prev, [opportunity.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void postComment(opportunity.id) } }} placeholder="Add a note…" disabled={postingComment === opportunity.id} className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-neutral-400 disabled:opacity-50" />
+                                    <button type="button" onClick={() => void postComment(opportunity.id)} disabled={postingComment === opportunity.id || !(commentDrafts[opportunity.id] || '').trim()} className="rounded-xl border border-neutral-900 bg-neutral-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:opacity-40">
+                                      {postingComment === opportunity.id ? '…' : 'Post'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        )
+                      }) : (
+                        <p className="text-sm text-neutral-500">No opportunities linked to this account yet.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">
+                  {crmLoading ? 'Loading account details…' : 'No account details available.'}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {lostReasonModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
