@@ -307,6 +307,68 @@ interface CrmComment {
   created_at: string
 }
 
+interface DeliverabilityOverall {
+  total_sent: number
+  bounce_count: number
+  bounce_rate: number | null
+  spam_count: number
+  spam_rate: number | null
+  unsub_count: number
+  unsub_rate: number | null
+  open_count: number
+  open_rate: number | null
+  click_count: number
+  click_rate: number | null
+}
+
+interface DeliverabilityDomainRow {
+  domain: string
+  sent: number
+  bounced: number
+  spam: number
+  unsubscribed: number
+  opened: number
+  bounce_rate: number
+  spam_rate: number
+  open_rate: number
+}
+
+interface DeliverabilityByCampaign {
+  campaign_id: string | null
+  campaign_name: string
+  sent: number
+  bounced: number
+  spam: number
+  unsubscribed: number
+  opened: number
+  replied: number
+  bounce_rate: number | null
+  spam_rate: number | null
+  open_rate: number | null
+  reply_rate: number | null
+  unsub_rate: number | null
+}
+
+interface SuppressionAuditRow {
+  id: string
+  full_name: string | null
+  email: string | null
+  email_suppressed: boolean
+  sms_suppressed: boolean
+  account_id: string | null
+  account_name: string | null
+  account_domain: string | null
+  suppressed_since: string
+}
+
+interface DeliverabilityData {
+  overall: DeliverabilityOverall
+  by_domain: DeliverabilityDomainRow[]
+  by_campaign: DeliverabilityByCampaign[]
+  suppression_audit: SuppressionAuditRow[]
+  suppression_summary: { email_suppressed: number; sms_suppressed: number; total: number }
+}
+
 interface CrmActivity {
   id: string
   type: string
@@ -418,7 +480,7 @@ const statusColors: Record<string, string> = {
 type OverviewDays = 0 | 7 | 14 | 30
 type ProspectDays = 0 | 7 | 14 | 30
 type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
-type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'reporting' | 'leadQuality' | 'prospects'
+type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'reporting' | 'leadQuality' | 'deliverability' | 'prospects'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
 type PipelineView = 'board' | 'workspace'
@@ -1062,6 +1124,7 @@ export default function SalesDashboard() {
   const [pipelineOwnerFilter, setPipelineOwnerFilter] = useState<'all' | 'mine' | 'unassigned'>('all')
   const [taskDueBucket, setTaskDueBucket] = useState<'all' | 'overdue' | 'today' | 'upcoming' | 'no_date'>('all')
   const [reportingData, setReportingData] = useState<ReportingData | null>(null)
+  const [deliverabilityData, setDeliverabilityData] = useState<DeliverabilityData | null>(null)
   const [lostReasonModal, setLostReasonModal] = useState<{ opportunityId: string; reason: string } | null>(null)
   const [stageExitModal, setStageExitModal] = useState<{ opportunityId: string; toStage: string; warning: string } | null>(null)
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([])
@@ -1705,6 +1768,12 @@ export default function SalesDashboard() {
     setReportingData(data)
   }
 
+  async function refreshDeliverabilityData() {
+    if (!session?.access_token) return
+    const data = await salesRequest<DeliverabilityData>(session.access_token, '/deliverability')
+    setDeliverabilityData(data)
+  }
+
   async function loadComments(opportunityId: string) {
     if (!session?.access_token) return
     const data = await salesRequest<{ comments: CrmComment[] }>(session.access_token, `/opportunities/${opportunityId}/comments`)
@@ -2021,6 +2090,13 @@ export default function SalesDashboard() {
           className={tabButtonClass(activeTab === 'leadQuality')}
         >
           Lead Quality
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('deliverability'); void refreshDeliverabilityData() }}
+          className={tabButtonClass(activeTab === 'deliverability')}
+        >
+          Deliverability
         </button>
         <button
           type="button"
@@ -3398,6 +3474,171 @@ export default function SalesDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'deliverability' ? (
+        <div className="space-y-4">
+          {/* Health summary cards */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            {[
+              { label: 'Total Sent', value: deliverabilityData ? deliverabilityData.overall.total_sent.toLocaleString() : '—', hint: 'Emails delivered to leads', color: '' },
+              { label: 'Bounce Rate', value: deliverabilityData?.overall.bounce_rate != null ? `${deliverabilityData.overall.bounce_rate}%` : '—', hint: 'Hard + soft bounces', color: (deliverabilityData?.overall.bounce_rate ?? 0) > 5 ? 'text-red-600' : 'text-emerald-600' },
+              { label: 'Spam Rate', value: deliverabilityData?.overall.spam_rate != null ? `${deliverabilityData.overall.spam_rate}%` : '—', hint: 'Spam complaint rate', color: (deliverabilityData?.overall.spam_rate ?? 0) > 0.1 ? 'text-red-600' : 'text-emerald-600' },
+              { label: 'Unsub Rate', value: deliverabilityData?.overall.unsub_rate != null ? `${deliverabilityData.overall.unsub_rate}%` : '—', hint: 'Unsubscribe rate', color: (deliverabilityData?.overall.unsub_rate ?? 0) > 2 ? 'text-amber-600' : 'text-emerald-600' },
+              { label: 'Open Rate', value: deliverabilityData?.overall.open_rate != null ? `${deliverabilityData.overall.open_rate}%` : '—', hint: 'Tracked opens (if enabled)', color: '' },
+            ].map((card) => (
+              <div key={card.label} className="rounded-xl border border-neutral-200/60 bg-white/70 px-4 py-4">
+                <p className="text-[10px] tracking-widest uppercase text-neutral-400">{card.label}</p>
+                <p className={`mt-1 text-xl font-semibold ${card.color || 'text-neutral-900'}`}>{card.value}</p>
+                <p className="mt-1 text-[11px] text-neutral-500">{card.hint}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Suppression summary */}
+          {deliverabilityData && deliverabilityData.suppression_summary.total > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-400 text-white text-[10px] font-bold">!</div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Suppression audit — {deliverabilityData.suppression_summary.total} contact{deliverabilityData.suppression_summary.total !== 1 ? 's' : ''} suppressed</p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    {deliverabilityData.suppression_summary.email_suppressed} email-suppressed · {deliverabilityData.suppression_summary.sms_suppressed} SMS-suppressed
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[500px] text-xs">
+                  <thead>
+                    <tr className="border-b border-amber-200 text-left text-[10px] uppercase tracking-widest text-amber-600">
+                      <th className="pb-2 pr-4">Contact</th>
+                      <th className="pb-2 pr-4">Email</th>
+                      <th className="pb-2 pr-4">Account</th>
+                      <th className="pb-2 pr-4">Flags</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deliverabilityData.suppression_audit.slice(0, 20).map((row) => (
+                      <tr key={row.id} className="border-b border-amber-100 last:border-0">
+                        <td className="py-2 pr-4 font-medium text-neutral-900">{row.full_name || '—'}</td>
+                        <td className="py-2 pr-4 text-neutral-500">{row.email || '—'}</td>
+                        <td className="py-2 pr-4 text-neutral-600">{row.account_name || '—'}</td>
+                        <td className="py-2 pr-4">
+                          {row.email_suppressed && <span className="mr-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">Email</span>}
+                          {row.sms_suppressed && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-medium text-orange-700">SMS</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {/* By domain */}
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Bounce rate by domain</h3>
+              <p className="mt-1 text-xs text-neutral-500">Domains with ≥ 2 sent emails, sorted by bounce rate</p>
+              {!deliverabilityData ? (
+                <p className="mt-6 text-center text-xs text-neutral-400">Loading…</p>
+              ) : deliverabilityData.by_domain.length === 0 ? (
+                <p className="mt-6 text-center text-xs text-neutral-400">No domain data yet</p>
+              ) : (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-neutral-100 text-left text-[10px] uppercase tracking-widest text-neutral-400">
+                        <th className="pb-2 pr-4">Domain</th>
+                        <th className="pb-2 pr-3 text-right">Sent</th>
+                        <th className="pb-2 pr-3 text-right">Bounced</th>
+                        <th className="pb-2 pr-3 text-right">Bounce%</th>
+                        <th className="pb-2 text-right">Spam%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliverabilityData.by_domain.slice(0, 15).map((row) => (
+                        <tr key={row.domain} className="border-b border-neutral-100 last:border-0">
+                          <td className="py-2 pr-4 font-medium text-neutral-900">{row.domain}</td>
+                          <td className="py-2 pr-3 text-right text-neutral-500">{row.sent}</td>
+                          <td className="py-2 pr-3 text-right text-neutral-500">{row.bounced}</td>
+                          <td className={`py-2 pr-3 text-right font-semibold ${row.bounce_rate > 10 ? 'text-red-600' : row.bounce_rate > 5 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {row.bounce_rate}%
+                          </td>
+                          <td className={`py-2 text-right font-semibold ${row.spam_rate > 0.3 ? 'text-red-600' : row.spam_rate > 0 ? 'text-amber-600' : 'text-neutral-400'}`}>
+                            {row.spam_rate > 0 ? `${row.spam_rate}%` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* By campaign */}
+            <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+              <h3 className="text-sm font-semibold text-neutral-900">Deliverability by campaign</h3>
+              <p className="mt-1 text-xs text-neutral-500">Bounce, unsub, and reply rates per campaign</p>
+              {!deliverabilityData ? (
+                <p className="mt-6 text-center text-xs text-neutral-400">Loading…</p>
+              ) : deliverabilityData.by_campaign.length === 0 ? (
+                <p className="mt-6 text-center text-xs text-neutral-400">No campaign data yet</p>
+              ) : (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-neutral-100 text-left text-[10px] uppercase tracking-widest text-neutral-400">
+                        <th className="pb-2 pr-4">Campaign</th>
+                        <th className="pb-2 pr-3 text-right">Sent</th>
+                        <th className="pb-2 pr-3 text-right">Bounce%</th>
+                        <th className="pb-2 pr-3 text-right">Unsub%</th>
+                        <th className="pb-2 text-right">Reply%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliverabilityData.by_campaign.map((row) => (
+                        <tr key={row.campaign_id ?? '_none'} className="border-b border-neutral-100 last:border-0">
+                          <td className="py-2 pr-4 font-medium text-neutral-900 max-w-[160px] truncate">{row.campaign_name}</td>
+                          <td className="py-2 pr-3 text-right text-neutral-500">{row.sent}</td>
+                          <td className={`py-2 pr-3 text-right font-semibold ${(row.bounce_rate ?? 0) > 5 ? 'text-red-600' : (row.bounce_rate ?? 0) > 0 ? 'text-amber-600' : 'text-neutral-400'}`}>
+                            {row.bounce_rate != null ? `${row.bounce_rate}%` : '—'}
+                          </td>
+                          <td className={`py-2 pr-3 text-right font-semibold ${(row.unsub_rate ?? 0) > 2 ? 'text-amber-600' : (row.unsub_rate ?? 0) > 0 ? 'text-neutral-600' : 'text-neutral-400'}`}>
+                            {row.unsub_rate != null ? `${row.unsub_rate}%` : '—'}
+                          </td>
+                          <td className={`py-2 text-right font-semibold ${(row.reply_rate ?? 0) >= 5 ? 'text-emerald-600' : (row.reply_rate ?? 0) > 0 ? 'text-neutral-700' : 'text-neutral-400'}`}>
+                            {row.reply_rate != null ? `${row.reply_rate}%` : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Reputation thresholds guide */}
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+            <h3 className="text-sm font-semibold text-neutral-900">Sender reputation thresholds</h3>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: 'Bounce rate', safe: '< 2%', warning: '2–5%', danger: '> 5%', note: 'Above 5% risks domain blacklisting' },
+                { label: 'Spam complaint', safe: '< 0.08%', warning: '0.08–0.3%', danger: '> 0.3%', note: 'Google/Yahoo threshold for throttling' },
+                { label: 'Unsubscribe rate', safe: '< 0.5%', warning: '0.5–2%', danger: '> 2%', note: 'High unsub signals poor targeting' },
+              ].map((t) => (
+                <div key={t.label} className="rounded-lg border border-neutral-100 bg-neutral-50/60 px-3 py-3">
+                  <p className="text-xs font-semibold text-neutral-900">{t.label}</p>
+                  <div className="mt-2 space-y-1 text-[11px]">
+                    <div className="flex items-center gap-2"><span className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-400" /><span className="text-emerald-700 font-medium">Safe</span><span className="text-neutral-500">{t.safe}</span></div>
+                    <div className="flex items-center gap-2"><span className="h-2 w-2 flex-shrink-0 rounded-full bg-amber-400" /><span className="text-amber-700 font-medium">Warn</span><span className="text-neutral-500">{t.warning}</span></div>
+                    <div className="flex items-center gap-2"><span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-400" /><span className="text-red-700 font-medium">Danger</span><span className="text-neutral-500">{t.danger}</span></div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-neutral-400">{t.note}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
