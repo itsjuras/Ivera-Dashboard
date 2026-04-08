@@ -31,6 +31,7 @@ import {
 const SALES_API = 'https://sales.ivera.ca'
 
 interface PortalStats {
+  totalCampaignRuns?: number
   crm?: {
     accounts: number
     opportunities: number
@@ -848,6 +849,22 @@ function buildLeadActivityFromSeries(series: NonNullable<PortalStats['leadActivi
   }))
 }
 
+function summarizeLeadActivitySeries(series: NonNullable<PortalStats['leadActivity']>, days: number) {
+  const filtered = days === 0
+    ? series
+    : series.filter((entry) => leadWithinDays(`${entry.date}T12:00:00.000Z`, days))
+
+  return filtered.reduce(
+    (totals, entry) => ({
+      sent: totals.sent + (entry.sent || 0) + (entry.replied || 0) + (entry.booked || 0),
+      replied: totals.replied + (entry.replied || 0) + (entry.booked || 0),
+      booked: totals.booked + (entry.booked || 0),
+      unsubscribed: totals.unsubscribed + (entry.unsubscribed || 0),
+    }),
+    { sent: 0, replied: 0, booked: 0, unsubscribed: 0 },
+  )
+}
+
 function MetricSection({
   title,
   icon: Icon,
@@ -892,6 +909,7 @@ function ListCard({
     title: string
     meta: string
     badge?: string
+    badgeClassName?: string
     interactive?: boolean
     metrics?: Array<{ label: string; value: string | number }>
     detail?: string
@@ -915,13 +933,13 @@ function ListCard({
               key={row.id}
               type="button"
               onClick={onRowClick && row.interactive !== false ? () => onRowClick(row.id) : undefined}
-              className={`flex w-full items-start justify-between gap-4 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 text-left ${
+              className={`flex w-full flex-col gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 text-left md:flex-row md:items-start md:justify-between ${
                 onRowClick && row.interactive !== false ? 'transition hover:bg-neutral-50/80' : ''
               }`}
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-neutral-900">{row.title}</p>
-                <p className="mt-1 text-xs text-neutral-500">{row.meta}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium leading-snug text-neutral-900 md:truncate">{row.title}</p>
+                <p className="mt-1 break-words text-xs leading-relaxed text-neutral-500">{row.meta}</p>
                 {row.detail ? (
                   <p className="mt-2 text-xs text-neutral-600">{row.detail}</p>
                 ) : null}
@@ -937,7 +955,7 @@ function ListCard({
                 ) : null}
               </div>
               {row.badge ? (
-                <span className="shrink-0 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                <span className={`inline-flex self-start rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] md:shrink-0 ${row.badgeClassName ?? 'border-neutral-200 bg-white text-neutral-500'}`}>
                   {row.badge}
                 </span>
               ) : null}
@@ -983,6 +1001,15 @@ function isHotQueueTask(task: CrmTask) {
 
 function formatStageLabel(stage: string) {
   return stage.replace(/_/g, ' ')
+}
+
+function lifecycleBadgeClass(stage: string) {
+  if (stage === 'won') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (stage === 'lost') return 'border-neutral-200 bg-neutral-100 text-neutral-600'
+  if (stage === 'proposal' || stage === 'verbal_commit' || stage === 'qualified') return 'border-blue-200 bg-blue-50 text-blue-700'
+  if (stage === 'meeting_booked' || stage === 'engaged') return 'border-violet-200 bg-violet-50 text-violet-700'
+  if (stage === 'contacted') return 'border-amber-200 bg-amber-50 text-amber-700'
+  return 'border-neutral-200 bg-white text-neutral-500'
 }
 
 function formatDateTimeInputValue(value: string | null | undefined) {
@@ -1313,6 +1340,7 @@ export default function SalesDashboard() {
   const followUpPerformance = stats?.followUpPerformance ?? []
   const campaignSourcePerformance = stats?.campaignSourcePerformance ?? []
   const campaigns = stats?.campaigns ?? []
+  const totalCampaignRuns = stats?.totalCampaignRuns ?? campaigns.length
   const campaignAnalyticsByDefinition = useMemo(() => {
     const entries = campaignDefinitions
       .map((definition) => {
@@ -1387,10 +1415,22 @@ export default function SalesDashboard() {
   }, [recentLeads, prospectDays, prospectScore, prospectStatus])
 
   const overviewSummary = useMemo(() => {
-    const sent = overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'sent').length
-    const replied = overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'replied').length
-    const booked = overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'booked').length
-    const unsubscribed = overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'unsubscribed').length
+    const activityTotals = leadActivitySeries.length > 0
+      ? summarizeLeadActivitySeries(leadActivitySeries, overviewDays)
+      : null
+
+    const sent = activityTotals
+      ? activityTotals.sent
+      : overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'sent').length
+    const replied = activityTotals
+      ? activityTotals.replied
+      : overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'replied').length
+    const booked = activityTotals
+      ? activityTotals.booked
+      : overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'booked').length
+    const unsubscribed = activityTotals
+      ? activityTotals.unsubscribed
+      : overviewLeads.filter((lead) => leadStatusBucket(lead.status) === 'unsubscribed').length
 
     return {
       sent,
@@ -1403,7 +1443,7 @@ export default function SalesDashboard() {
       highIntent: highIntentCount(overviewLeads),
       recentReplies: recentReplyCount(overviewLeads),
     }
-  }, [overviewLeads])
+  }, [leadActivitySeries, overviewDays, overviewLeads])
 
   const leadActivity = useMemo(
     () => (
@@ -1631,7 +1671,7 @@ export default function SalesDashboard() {
   const outreachMetrics = [
     { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
     { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Rolling 7 days' },
-    { label: 'Campaign Runs', value: campaigns.length, hint: 'Recorded runs' },
+    { label: 'Campaign Runs', value: totalCampaignRuns, hint: 'Recorded runs' },
     { label: 'Latest Run', value: latestRunLabel(campaigns), hint: 'Most recent activity' },
     { label: 'Next Run', value: formatScheduledRun(nextScheduledRun), hint: 'Tue–Thu at 17:00 UTC' },
   ]
@@ -1714,7 +1754,10 @@ export default function SalesDashboard() {
     title: account.name,
     meta: [account.domain, account.geo, account.segment].filter(Boolean).join(' · ') || 'Tracked account',
     badge: formatStageLabel(account.lifecycle_stage),
-    detail: account.updated_at ? `Updated ${timeAgo(account.updated_at)}` : undefined,
+    badgeClassName: lifecycleBadgeClass(account.lifecycle_stage),
+    detail: account.updated_at
+      ? `Status: ${formatStageLabel(account.lifecycle_stage)} · Updated ${timeAgo(account.updated_at)}`
+      : `Status: ${formatStageLabel(account.lifecycle_stage)}`,
     interactive: true,
   }))
 
