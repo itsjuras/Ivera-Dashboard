@@ -33,6 +33,7 @@ import {
 } from './salesAnalytics'
 
 const SALES_API = 'https://sales.ivera.ca'
+const GUIDED_OPS_RESOLUTION_KEY = 'ivera.guidedOpsResolutions'
 
 interface PortalStats {
   totalCampaignRuns?: number
@@ -1168,6 +1169,7 @@ export default function SalesDashboard() {
   const [campaignAssessment, setCampaignAssessment] = useState<CampaignAssessment | null>(null)
   const [reassessModalOpen, setReassessModalOpen] = useState(false)
   const [assessmentApplied, setAssessmentApplied] = useState(false)
+  const [guidedOpsResolutions, setGuidedOpsResolutions] = useState<Record<string, { resolvedAt: string; runAt: string | null }>>({})
   const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
   const [newCampaignDraft, setNewCampaignDraft] = useState<CampaignConfig>({
     name: '',
@@ -1221,6 +1223,38 @@ export default function SalesDashboard() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [postingComment, setPostingComment] = useState<string | null>(null)
   const reassessControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(GUIDED_OPS_RESOLUTION_KEY)
+      if (!raw) return
+      setGuidedOpsResolutions(JSON.parse(raw))
+    } catch {
+      // ignore malformed local state
+    }
+  }, [])
+
+  function updateGuidedOpsResolution(key: string, value: { resolvedAt: string; runAt: string | null } | null) {
+    setGuidedOpsResolutions((current) => {
+      const next = { ...current }
+      if (value) next[key] = value
+      else delete next[key]
+      try {
+        window.localStorage.setItem(GUIDED_OPS_RESOLUTION_KEY, JSON.stringify(next))
+      } catch {
+        // ignore storage failures
+      }
+      return next
+    })
+  }
+
+  function markCampaignHealthSuggestionResolved() {
+    if (!selectedCampaignDefinition) return
+    updateGuidedOpsResolution(`campaign-health:${selectedCampaignDefinition.id}`, {
+      resolvedAt: new Date().toISOString(),
+      runAt: selectedCampaignAnalytics?.latestRun?.created_at || null,
+    })
+  }
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -2027,6 +2061,9 @@ export default function SalesDashboard() {
             product_context: editingCampaign.product_context,
             target_description: editingCampaign.target_description,
             num_leads_per_run: editingCampaign.num_leads_per_run,
+            schedule_days: editingCampaign.schedule_days,
+            schedule_time_local: editingCampaign.schedule_time_local,
+            schedule_timezone: editingCampaign.schedule_timezone,
             sender_name: editingCampaign.sender_name ?? null,
             sender_email: editingCampaign.sender_email ?? null,
             reply_to_email: editingCampaign.reply_to_email ?? null,
@@ -2035,6 +2072,7 @@ export default function SalesDashboard() {
         },
       )
       setSelectedCampaignId(data.campaign.id)
+      markCampaignHealthSuggestionResolved()
       setAdminActionMessage(data.message || 'Campaign saved.')
       await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
@@ -2088,6 +2126,7 @@ export default function SalesDashboard() {
       }
     })
     setAssessmentApplied(true)
+    markCampaignHealthSuggestionResolved()
     setAdminActionMessage('Applied reassessment suggestions to the campaign draft. Save Campaign to persist them.')
     setAdminActionError(null)
   }
@@ -2268,6 +2307,15 @@ export default function SalesDashboard() {
     setProspectHistory(null)
   }
 
+  const campaignHealthResolution = selectedCampaignDefinition
+    ? guidedOpsResolutions[`campaign-health:${selectedCampaignDefinition.id}`]
+    : null
+  const campaignHealthResolvedForCurrentRun = Boolean(
+    selectedCampaignAnalytics
+      && campaignHealthResolution
+      && campaignHealthResolution.runAt === (selectedCampaignAnalytics.latestRun?.created_at || null),
+  )
+
   const guidedOpsCards = [
     liveCampaign && liveCampaignProgress
       ? {
@@ -2343,11 +2391,12 @@ export default function SalesDashboard() {
       ? {
           id: 'campaign-health',
           tone: 'blue' as const,
-          label: 'Improve',
+          label: campaignHealthResolvedForCurrentRun ? 'Checked' : 'Improve',
           priority: 2,
           title: `${selectedCampaignDefinition?.name || 'Selected campaign'} health is ${selectedCampaignAnalytics.healthScore}/100`,
           detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
-          actionLabel: 'Edit Campaign',
+          actionLabel: campaignHealthResolvedForCurrentRun ? 'Review Campaign' : 'Edit Campaign',
+          resolved: campaignHealthResolvedForCurrentRun,
           onClick: () => {
             setActiveTab('editCampaign')
           },
@@ -2361,6 +2410,7 @@ export default function SalesDashboard() {
     title: string
     detail: string
     actionLabel: string
+    resolved?: boolean
     onClick: () => void
   } => Boolean(card)).sort((a, b) => a.priority - b.priority) as Array<{
     id: string
@@ -2370,6 +2420,7 @@ export default function SalesDashboard() {
     title: string
     detail: string
     actionLabel: string
+    resolved?: boolean
     onClick: () => void
   }>
 
@@ -2429,14 +2480,16 @@ export default function SalesDashboard() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`inline-flex h-2.5 w-2.5 rounded-full ${
-                          card.priority === 1
+                          card.resolved
+                            ? 'bg-emerald-500'
+                            : card.priority === 1
                             ? 'bg-amber-500'
                             : card.priority === 2
                               ? 'bg-blue-500'
                               : 'bg-neutral-400'
                         }`}
                         />
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">{card.label}</p>
+                        <p className={`text-[10px] uppercase tracking-[0.18em] ${card.resolved ? 'text-emerald-600' : 'text-neutral-400'}`}>{card.label}</p>
                       </div>
                       <p className="mt-1 text-sm font-semibold text-neutral-900">{card.title}</p>
                       <p className="mt-1 text-xs leading-relaxed text-neutral-600">{card.detail}</p>
