@@ -1663,14 +1663,6 @@ export default function SalesDashboard() {
     () => buildRecommendedActions(selectedRun?.funnel_diagnostics),
     [selectedRun],
   )
-  const selectedCampaignRunInsights = useMemo(
-    () => buildRunInsights(selectedCampaignAnalytics?.latestRun?.funnel_diagnostics),
-    [selectedCampaignAnalytics],
-  )
-  const selectedCampaignRunActions = useMemo(
-    () => buildRecommendedActions(selectedCampaignAnalytics?.latestRun?.funnel_diagnostics),
-    [selectedCampaignAnalytics],
-  )
   const selectedCampaignHasLiveRun = Boolean(
     liveCampaign
     && selectedCampaignDefinition
@@ -3231,26 +3223,6 @@ export default function SalesDashboard() {
                           </div>
                         ) : null}
 
-                        {selectedCampaignRunInsights.length ? (
-                          <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
-                            <div className="mt-3 space-y-2">
-                              {selectedCampaignRunInsights.map((insight) => (
-                                <p key={insight} className="text-sm text-neutral-700">{insight}</p>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                        {selectedCampaignRunActions.length ? (
-                          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-                            <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
-                            <div className="mt-3 space-y-2">
-                              {selectedCampaignRunActions.map((action) => (
-                                <p key={action} className="text-sm text-neutral-700">{action}</p>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
                       </>
                     ) : (
                       <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4 text-sm text-neutral-600">
