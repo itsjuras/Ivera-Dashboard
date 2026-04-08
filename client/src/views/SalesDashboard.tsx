@@ -2328,93 +2328,99 @@ export default function SalesDashboard() {
     onClick: () => void
   }
 
-  const guidedOpsCards = [
-    liveCampaign && liveCampaignProgress
-      ? {
-          id: 'live-run',
-          tone: liveCampaignProgress.isComplete ? 'emerald' : 'neutral',
-          label: liveCampaignProgress.isComplete ? 'Status' : 'Status',
-          priority: 2,
-          title: pendingRun?.title || formatCampaignRunTitle(liveCampaign),
-          detail: liveCampaignProgress.summary,
-          actionLabel: 'Open Outreach',
-          onClick: () => {
-            setActiveTab('outreach')
-          },
-        }
-      : (role === 'ivera_admin' && selectedCampaignDefinition && !hasActiveCampaign
-        ? {
-            id: 'next-run',
-            tone: 'blue' as const,
-            label: 'Next Step',
-            priority: 3,
-            title: `Start ${selectedCampaignDefinition.name}`,
-            detail: `${selectedCampaignDefinition.num_leads_per_run} leads/run ready from the selected campaign.`,
-            actionLabel: 'Open Campaign Setup',
-            onClick: () => {
-              setSelectedCampaignId(selectedCampaignDefinition.id)
-              setActiveTab('editCampaign')
-            },
-          }
-        : null),
-    hotQueueTasks.length
-      ? {
-          id: 'hot-queue',
-          tone: 'amber' as const,
-          label: 'Issue',
-          priority: 1,
-          title: `${hotQueueTasks.length} hot ${hotQueueTasks.length === 1 ? 'reply' : 'replies'} waiting`,
-          detail: 'High-priority replies and booked meetings are sitting in the inbox.',
-          actionLabel: 'Open Pipeline',
-          onClick: () => {
-            setActiveTab('pipeline')
-          },
-        }
-      : null,
-    overdueTasks.length
-      ? {
-          id: 'overdue',
-          tone: 'amber' as const,
-          label: 'Issue',
-          priority: 1,
-          title: `${overdueTasks.length} overdue ${overdueTasks.length === 1 ? 'task' : 'tasks'}`,
-          detail: 'Some next steps are slipping past their due dates.',
-          actionLabel: 'Resolve Tasks',
-          onClick: () => {
-            setActiveTab('pipeline')
-          },
-        }
-      : null,
-    handoffOpportunities.length
-      ? {
-          id: 'handoff',
-          tone: 'violet' as const,
-          label: 'Issue',
-          priority: 1,
-          title: `${handoffOpportunities.length} unowned ${handoffOpportunities.length === 1 ? 'opportunity' : 'opportunities'}`,
-          detail: 'Engaged or high-priority deals need a human owner.',
-          actionLabel: 'Claim Deals',
-          onClick: () => {
-            setActiveTab('pipeline')
-          },
-        }
-      : null,
-    selectedCampaignAnalytics && selectedCampaignAnalytics.healthScore < 65
-      ? {
-          id: 'campaign-health',
-          tone: 'blue' as const,
-          label: campaignHealthResolvedForCurrentRun ? 'Checked' : 'Improve',
-          priority: 2,
-          title: `${selectedCampaignDefinition?.name || 'Selected campaign'} health is ${selectedCampaignAnalytics.healthScore}/100`,
-          detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
-          actionLabel: campaignHealthResolvedForCurrentRun ? 'Review Campaign' : 'Edit Campaign',
-          resolved: campaignHealthResolvedForCurrentRun,
-          onClick: () => {
-            setActiveTab('editCampaign')
-          },
-        }
-      : null,
-  ].filter((card): card is GuidedOpsCard => Boolean(card)).sort((a, b) => a.priority - b.priority)
+  const guidedOpsCards: GuidedOpsCard[] = []
+
+  if (liveCampaign && liveCampaignProgress) {
+    guidedOpsCards.push({
+      id: 'live-run',
+      tone: liveCampaignProgress.isComplete ? 'emerald' : 'neutral',
+      label: 'Status',
+      priority: 2,
+      title: pendingRun?.title || formatCampaignRunTitle(liveCampaign),
+      detail: liveCampaignProgress.summary,
+      actionLabel: 'Open Outreach',
+      onClick: () => {
+        setActiveTab('outreach')
+      },
+    })
+  } else if (role === 'ivera_admin' && selectedCampaignDefinition && !hasActiveCampaign) {
+    guidedOpsCards.push({
+      id: 'next-run',
+      tone: 'blue',
+      label: 'Next Step',
+      priority: 3,
+      title: `Start ${selectedCampaignDefinition.name}`,
+      detail: `${selectedCampaignDefinition.num_leads_per_run} leads/run ready from the selected campaign.`,
+      actionLabel: 'Open Campaign Setup',
+      onClick: () => {
+        setSelectedCampaignId(selectedCampaignDefinition.id)
+        setActiveTab('editCampaign')
+      },
+    })
+  }
+
+  if (hotQueueTasks.length) {
+    guidedOpsCards.push({
+      id: 'hot-queue',
+      tone: 'amber',
+      label: 'Issue',
+      priority: 1,
+      title: `${hotQueueTasks.length} hot ${hotQueueTasks.length === 1 ? 'reply' : 'replies'} waiting`,
+      detail: 'High-priority replies and booked meetings are sitting in the inbox.',
+      actionLabel: 'Open Pipeline',
+      onClick: () => {
+        setActiveTab('pipeline')
+      },
+    })
+  }
+
+  if (overdueTasks.length) {
+    guidedOpsCards.push({
+      id: 'overdue',
+      tone: 'amber',
+      label: 'Issue',
+      priority: 1,
+      title: `${overdueTasks.length} overdue ${overdueTasks.length === 1 ? 'task' : 'tasks'}`,
+      detail: 'Some next steps are slipping past their due dates.',
+      actionLabel: 'Resolve Tasks',
+      onClick: () => {
+        setActiveTab('pipeline')
+      },
+    })
+  }
+
+  if (handoffOpportunities.length) {
+    guidedOpsCards.push({
+      id: 'handoff',
+      tone: 'violet',
+      label: 'Issue',
+      priority: 1,
+      title: `${handoffOpportunities.length} unowned ${handoffOpportunities.length === 1 ? 'opportunity' : 'opportunities'}`,
+      detail: 'Engaged or high-priority deals need a human owner.',
+      actionLabel: 'Claim Deals',
+      onClick: () => {
+        setActiveTab('pipeline')
+      },
+    })
+  }
+
+  if (selectedCampaignAnalytics && selectedCampaignAnalytics.healthScore < 65) {
+    guidedOpsCards.push({
+      id: 'campaign-health',
+      tone: 'blue',
+      label: campaignHealthResolvedForCurrentRun ? 'Checked' : 'Improve',
+      priority: 2,
+      title: `${selectedCampaignDefinition?.name || 'Selected campaign'} health is ${selectedCampaignAnalytics.healthScore}/100`,
+      detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
+      actionLabel: campaignHealthResolvedForCurrentRun ? 'Review Campaign' : 'Edit Campaign',
+      resolved: campaignHealthResolvedForCurrentRun,
+      onClick: () => {
+        setActiveTab('editCampaign')
+      },
+    })
+  }
+
+  guidedOpsCards.sort((a, b) => a.priority - b.priority)
 
   if (!stats && !error) {
     return (
