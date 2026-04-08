@@ -1671,6 +1671,11 @@ export default function SalesDashboard() {
     () => buildRecommendedActions(selectedCampaignAnalytics?.latestRun?.funnel_diagnostics),
     [selectedCampaignAnalytics],
   )
+  const selectedCampaignHasLiveRun = Boolean(
+    liveCampaign
+    && selectedCampaignDefinition
+    && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id,
+  )
   const selectedCampaignRuns = useMemo(() => {
     if (!selectedCampaignDefinition) {
       if (campaignRunFilter === 'all') return latestCampaignRuns
@@ -2199,11 +2204,19 @@ export default function SalesDashboard() {
     }
   }
 
-  async function handleCampaignAction(definitionId: string, action: 'pause' | 'restart' | 'archive') {
+  async function handleCampaignAction(definitionId: string, action: 'pause' | 'restart' | 'archive' | 'cancel') {
     if (!session?.access_token) return
-    const actionLabel = action === 'pause' ? 'pause' : action === 'restart' ? 'restart' : 'archive'
+    const actionLabel = action === 'pause'
+      ? 'pause'
+      : action === 'restart'
+        ? 'restart'
+        : action === 'cancel'
+          ? 'cancel'
+          : 'archive'
     const confirmationMessage = action === 'archive'
       ? 'Archive this campaign? It will be hidden from active use until you restore it later in code.'
+      : action === 'cancel'
+        ? 'Cancel the active run? This stops the in-flight send loop but keeps the campaign ready so you can fix the settings and run it again.'
       : action === 'restart'
         ? 'Restart this campaign now? This starts a fresh run using the saved campaign settings.'
         : 'Pause this campaign? Any active run linked to it will be stopped.'
@@ -2220,7 +2233,10 @@ export default function SalesDashboard() {
       const data = await salesRequest<{ message: string }>(session.access_token, `/campaigns/${definitionId}/${action}`, {
         method: 'POST',
       })
-      setAdminActionMessage(data.message || `Campaign ${actionLabel}d.`)
+      setAdminActionMessage(
+        data.message
+        || (action === 'cancel' ? 'Active run cancelled.' : `Campaign ${actionLabel}d.`),
+      )
       await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : `Failed to ${actionLabel} campaign.`)
@@ -2586,6 +2602,7 @@ export default function SalesDashboard() {
             setEditingCampaign={setEditingCampaign}
             selectedCampaignDefinition={selectedCampaignDefinition}
             selectedCampaignAnalytics={selectedCampaignAnalytics}
+            campaignAnalyticsByDefinition={campaignAnalyticsByDefinition}
             showNewCampaignForm={showNewCampaignForm}
             setShowNewCampaignForm={setShowNewCampaignForm}
             newCampaignDraft={newCampaignDraft}
@@ -2829,9 +2846,9 @@ export default function SalesDashboard() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-[11px] tracking-widest uppercase text-neutral-400">Outreach Operations</p>
-                <h3 className="mt-1 text-sm font-semibold text-neutral-900">Run, monitor, and review campaigns here</h3>
+                <h3 className="mt-1 text-sm font-semibold text-neutral-900">Run and monitor the selected campaign here</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Outreach is now the operational home for campaign status, live runs, analytics, and recent run history.
+                  Outreach is now the operational home for the selected campaign, its live run, analytics, and recent run history.
                 </p>
               </div>
               {selectedCampaignDefinition ? (
@@ -2845,8 +2862,8 @@ export default function SalesDashboard() {
               ) : null}
             </div>
 
-            <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="space-y-3">
+            <div className="mt-5">
+              <div className="hidden space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaigns</p>
@@ -3018,11 +3035,15 @@ export default function SalesDashboard() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'pause')}
-                          disabled={savingCampaign || selectedCampaignDefinition.status !== 'active'}
-                          className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, selectedCampaignHasLiveRun ? 'cancel' : 'pause')}
+                          disabled={savingCampaign || (!selectedCampaignHasLiveRun && selectedCampaignDefinition.status !== 'active')}
+                          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:cursor-not-allowed disabled:opacity-50 ${
+                            selectedCampaignHasLiveRun
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : 'border-neutral-200 bg-white text-neutral-700'
+                          }`}
                         >
-                          Pause
+                          {selectedCampaignHasLiveRun ? 'Cancel Active Run' : 'Pause'}
                         </button>
                         <button
                           type="button"
@@ -3078,22 +3099,32 @@ export default function SalesDashboard() {
                       </div>
                       <p className="mt-2 text-[11px] text-neutral-500">
                         {hasActiveCampaign
-                          ? 'A run is already active. Pause or wait for it to finish before starting another one.'
+                          ? 'A run is already active. Cancel it here or wait for it to finish before starting another one.'
                           : `Default run size is ${selectedCampaignDefinition.num_leads_per_run} leads.`}
                       </p>
                     </div>
 
-                    {liveCampaign && liveCampaignProgress && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id ? (
+                    {selectedCampaignHasLiveRun && liveCampaignProgress ? (
                       <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <p className="text-[11px] tracking-widest uppercase text-emerald-700">Live Run</p>
-                            <p className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun?.title || formatCampaignRunTitle(liveCampaign)}</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun?.title || formatCampaignRunTitle(liveCampaign!)}</p>
                             <p className="mt-1 text-xs text-neutral-600">{liveCampaignProgress.summary}</p>
                           </div>
                           <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
                             {liveCampaignProgress.badge}
                           </span>
+                        </div>
+                        <div className="mt-3 flex justify-start">
+                          <button
+                            type="button"
+                            onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'cancel')}
+                            disabled={savingCampaign}
+                            className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Cancel Active Run
+                          </button>
                         </div>
                         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/90">
                           <div

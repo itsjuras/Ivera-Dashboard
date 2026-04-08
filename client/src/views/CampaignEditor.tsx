@@ -1,6 +1,11 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
-import { statusColors, type CampaignConfig, type CampaignDefinition } from './salesUtils'
+import {
+  statusColors,
+  type CampaignConfig,
+  type CampaignDefinition,
+} from './salesUtils'
+import { healthTone, replyRate, type CampaignAnalytics } from './salesAnalytics'
 
 const SCHEDULE_DAY_OPTIONS = [
   { value: 'mon', label: 'Mon' },
@@ -26,7 +31,8 @@ interface CampaignEditorProps {
   editingCampaign: CampaignConfig | null
   setEditingCampaign: React.Dispatch<React.SetStateAction<CampaignConfig | null>>
   selectedCampaignDefinition: CampaignDefinition | null
-  selectedCampaignAnalytics?: unknown
+  selectedCampaignAnalytics?: CampaignAnalytics | null
+  campaignAnalyticsByDefinition?: Map<string, CampaignAnalytics>
   showNewCampaignForm: boolean
   setShowNewCampaignForm: React.Dispatch<React.SetStateAction<boolean>>
   newCampaignDraft: CampaignConfig
@@ -65,6 +71,7 @@ export default function CampaignEditor({
   editingCampaign,
   setEditingCampaign,
   selectedCampaignDefinition,
+  campaignAnalyticsByDefinition,
   showNewCampaignForm,
   setShowNewCampaignForm,
   newCampaignDraft,
@@ -128,43 +135,77 @@ export default function CampaignEditor({
             ) : (
               <div className="mt-5 grid gap-3 lg:grid-cols-2">
                 {campaignDefinitions.map((campaign) => (
-                  <div
-                    key={campaign.id}
-                    onClick={() => onSelectCampaign(campaign.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        onSelectCampaign(campaign.id)
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    className={`rounded-2xl border px-4 py-4 text-left transition ${
-                      selectedCampaignId === campaign.id
-                        ? 'border-neutral-900 bg-neutral-50 shadow-sm'
-                        : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
-                          {campaign.is_default ? (
-                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
-                              Default
+                  (() => {
+                    const analytics = campaignAnalyticsByDefinition?.get(campaign.id) ?? null
+                    return (
+                      <div
+                        key={campaign.id}
+                        onClick={() => onSelectCampaign(campaign.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            onSelectCampaign(campaign.id)
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className={`rounded-2xl border px-4 py-4 text-left transition ${
+                          selectedCampaignId === campaign.id
+                            ? 'border-neutral-900 bg-neutral-50 shadow-sm'
+                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
+                              {campaign.is_default ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                  Default
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
+                            <p className="mt-2 text-xs text-neutral-500">
+                              {analytics?.latestRun
+                                ? `Last run ${new Date(analytics.latestRun.created_at).toLocaleString('en-CA', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                })}`
+                                : 'No runs yet'}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {analytics ? (
+                              <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${healthTone(analytics.healthScore)}`}>
+                                Health {analytics.healthScore}/100
+                              </span>
+                            ) : null}
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
+                              {campaign.status}
                             </span>
-                          ) : null}
+                          </div>
                         </div>
-                        <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
-                        <p className="mt-3 text-[11px] uppercase tracking-[0.16em] text-neutral-400">
-                          {campaign.num_leads_per_run} leads/run
-                        </p>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Runs</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics?.totalRuns ?? campaign.total_runs ?? 0}</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Sent</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics?.sent ?? 0}</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics ? replyRate(analytics.replied, analytics.sent) : '—'}</p>
+                          </div>
+                        </div>
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
-                        {campaign.status}
-                      </span>
-                    </div>
-                  </div>
+                    )
+                  })()
                 ))}
               </div>
             )}
