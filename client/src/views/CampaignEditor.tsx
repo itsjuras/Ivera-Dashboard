@@ -1,6 +1,6 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
-import { statusColors, type CampaignConfig, type CampaignDefinition } from './salesUtils'
+import { statusColors, type CampaignAssessment, type CampaignConfig, type CampaignDefinition } from './salesUtils'
 
 interface CampaignEditorProps {
   role: string
@@ -19,6 +19,10 @@ interface CampaignEditorProps {
   manualLeadOverride?: string
   setManualLeadOverride?: (v: string) => void
   savingCampaign: boolean
+  reassessingCampaign?: boolean
+  reassessInput?: string
+  setReassessInput?: React.Dispatch<React.SetStateAction<string>>
+  assessment?: CampaignAssessment | null
   runningCampaign?: boolean
   runStartDisabled?: boolean
   hasActiveCampaign?: boolean
@@ -35,6 +39,8 @@ interface CampaignEditorProps {
   followUpPerformance?: unknown
   onRunCampaign?: (definitionId: string) => Promise<void>
   onSaveCampaign: () => Promise<void>
+  onReassessCampaign?: () => Promise<void>
+  onApplyAssessment?: () => void
   onSetDefault: (definitionId: string) => Promise<void>
   onCreateCampaign: () => Promise<void>
   onCampaignAction?: (definitionId: string, action: 'pause' | 'restart' | 'archive') => Promise<void>
@@ -54,9 +60,15 @@ export default function CampaignEditor({
   newCampaignDraft,
   setNewCampaignDraft,
   savingCampaign,
+  reassessingCampaign,
+  reassessInput,
+  setReassessInput,
+  assessment,
   adminActionMessage,
   adminActionError,
   onSaveCampaign,
+  onReassessCampaign,
+  onApplyAssessment,
   onSetDefault,
   onCreateCampaign,
 }: CampaignEditorProps) {
@@ -335,6 +347,14 @@ export default function CampaignEditor({
             </button>
             <button
               type="button"
+              onClick={() => void onReassessCampaign?.()}
+              disabled={reassessingCampaign || savingCampaign}
+              className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {reassessingCampaign ? 'Reassessing...' : 'Self Reassess'}
+            </button>
+            <button
+              type="button"
               onClick={() => void onSetDefault(selectedCampaignDefinition.id)}
               disabled={savingCampaign || selectedCampaignDefinition.is_default || selectedCampaignDefinition.status === 'archived'}
               className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -342,6 +362,79 @@ export default function CampaignEditor({
               {selectedCampaignDefinition.is_default ? 'Default Campaign' : 'Set Default'}
             </button>
           </div>
+
+          <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
+            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reassessment Guidance</p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Add any extra instruction for the AI. Live campaign-health hints will also be folded into the reassessment automatically.
+            </p>
+            <textarea
+              value={reassessInput ?? ''}
+              onChange={(event) => setReassessInput?.(event.target.value)}
+              rows={3}
+              placeholder="Optional: keep Canada primary, focus on mortgage brokers, avoid weak-fit clinics..."
+              className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+            />
+          </div>
+
+          {assessment ? (
+            <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-[11px] tracking-widest uppercase text-blue-700">Reassessment Output</p>
+                  <p className="mt-1 text-sm text-neutral-700">{assessment.summary}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onApplyAssessment}
+                  className="rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 transition hover:border-blue-300"
+                >
+                  Apply Suggested Changes
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <div className="rounded-xl border border-emerald-200 bg-white/80 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-emerald-700">Strengths</p>
+                  <div className="mt-3 space-y-2">
+                    {assessment.strengths.map((item) => (
+                      <p key={item} className="text-sm text-neutral-700">{item}</p>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-white/80 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-amber-700">Issues</p>
+                  <div className="mt-3 space-y-2">
+                    {assessment.issues.map((item) => (
+                      <p key={item} className="text-sm text-neutral-700">{item}</p>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-white/80 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommendations</p>
+                  <div className="mt-3 space-y-2">
+                    {assessment.recommendations.map((item) => (
+                      <p key={item} className="text-sm text-neutral-700">{item}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {assessment.changeSet.length ? (
+                <div className="mt-4 rounded-xl border border-neutral-200 bg-white/80 p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Changes</p>
+                  <div className="mt-3 space-y-2">
+                    {assessment.changeSet.map((change, index) => (
+                      <div key={`${change.field}-${index}`} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                        <p className="text-sm font-semibold text-neutral-900">{change.field}</p>
+                        <p className="mt-1 text-xs text-neutral-500">{change.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

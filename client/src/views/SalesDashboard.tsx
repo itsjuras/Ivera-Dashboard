@@ -226,6 +226,25 @@ interface CampaignAnalytics {
   healthScore: number
 }
 
+interface CampaignAssessment {
+  summary: string
+  strengths: string[]
+  issues: string[]
+  recommendations: string[]
+  suggestedConfig: {
+    product_name: string
+    product_context: string
+    target_description: string
+    num_leads_per_run: number
+  }
+  changeSet: Array<{
+    field: string
+    from: unknown
+    to: unknown
+    reason: string
+  }>
+}
+
 interface CrmAccountSummary {
   id: string
   name: string
@@ -1118,6 +1137,9 @@ export default function SalesDashboard() {
   const [campaignDefinitions, setCampaignDefinitions] = useState<CampaignDefinition[]>([])
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
   const [editingCampaign, setEditingCampaign] = useState<CampaignConfig | null>(null)
+  const [reassessingCampaign, setReassessingCampaign] = useState(false)
+  const [reassessInput, setReassessInput] = useState('')
+  const [campaignAssessment, setCampaignAssessment] = useState<CampaignAssessment | null>(null)
   const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
   const [newCampaignDraft, setNewCampaignDraft] = useState<CampaignConfig>({
     name: '',
@@ -1373,6 +1395,8 @@ export default function SalesDashboard() {
     if (!campaignDefinitions.length) {
       setSelectedCampaignId(null)
       setEditingCampaign(null)
+      setCampaignAssessment(null)
+      setReassessInput('')
       return
     }
 
@@ -1389,6 +1413,7 @@ export default function SalesDashboard() {
   useEffect(() => {
     if (!selectedCampaignDefinition) {
       setEditingCampaign(null)
+      setCampaignAssessment(null)
       return
     }
 
@@ -1404,6 +1429,7 @@ export default function SalesDashboard() {
       reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
       cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
     })
+    setCampaignAssessment(null)
   }, [selectedCampaignDefinition])
 
   const overviewLeads = useMemo(
@@ -1972,6 +1998,44 @@ export default function SalesDashboard() {
     }
   }
 
+  async function handleReassessCampaign() {
+    if (!session?.access_token || !editingCampaign) return
+    setReassessingCampaign(true)
+    setAdminActionError(null)
+    setAdminActionMessage(null)
+
+    try {
+      const data = await salesRequest<{ assessment: CampaignAssessment }>(session.access_token, '/campaign/reassess', {
+        method: 'POST',
+        body: JSON.stringify({
+          admin_input: reassessInput.trim() || undefined,
+        }),
+      })
+      setCampaignAssessment(data.assessment)
+      setAdminActionMessage('Campaign reassessment is ready to review.')
+    } catch (err) {
+      setAdminActionError(err instanceof Error ? err.message : 'Failed to reassess campaign.')
+    } finally {
+      setReassessingCampaign(false)
+    }
+  }
+
+  function applyCampaignAssessment() {
+    if (!campaignAssessment) return
+    setEditingCampaign((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        product_name: campaignAssessment.suggestedConfig.product_name,
+        product_context: campaignAssessment.suggestedConfig.product_context,
+        target_description: campaignAssessment.suggestedConfig.target_description,
+        num_leads_per_run: campaignAssessment.suggestedConfig.num_leads_per_run,
+      }
+    })
+    setAdminActionMessage('Applied reassessment suggestions to the campaign draft. Save when you are ready.')
+    setAdminActionError(null)
+  }
+
   async function setDefaultCampaign(definitionId: string) {
     if (!session?.access_token) return
     setSavingCampaign(true)
@@ -2360,6 +2424,10 @@ export default function SalesDashboard() {
             manualLeadOverride={manualLeadOverride}
             setManualLeadOverride={setManualLeadOverride}
             savingCampaign={savingCampaign}
+            reassessingCampaign={reassessingCampaign}
+            reassessInput={reassessInput}
+            setReassessInput={setReassessInput}
+            assessment={campaignAssessment}
             runningCampaign={runningCampaign}
             runStartDisabled={runStartDisabled}
             hasActiveCampaign={hasActiveCampaign}
@@ -2376,6 +2444,8 @@ export default function SalesDashboard() {
             followUpPerformance={followUpPerformance}
             onRunCampaign={handleRunCampaign}
             onSaveCampaign={saveCampaignDefinition}
+            onReassessCampaign={handleReassessCampaign}
+            onApplyAssessment={applyCampaignAssessment}
             onSetDefault={setDefaultCampaign}
             onCreateCampaign={createCampaignDefinition}
             onCampaignAction={handleCampaignAction}

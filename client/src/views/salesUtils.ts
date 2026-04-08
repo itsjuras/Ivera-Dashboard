@@ -70,6 +70,25 @@ export interface CampaignAnalytics {
   healthScore: number
 }
 
+export interface CampaignAssessment {
+  summary: string
+  strengths: string[]
+  issues: string[]
+  recommendations: string[]
+  suggestedConfig: {
+    product_name: string
+    product_context: string
+    target_description: string
+    num_leads_per_run: number
+  }
+  changeSet: Array<{
+    field: string
+    from: unknown
+    to: unknown
+    reason: string
+  }>
+}
+
 // Type alias for a single campaign run entry from PortalStats
 export interface CampaignRun {
   id: string
