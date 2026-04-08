@@ -3890,7 +3890,6 @@ export default function SalesDashboard() {
         </div>
       )}
       </>
-      ) : null}
       {selectedLeadId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
           <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
