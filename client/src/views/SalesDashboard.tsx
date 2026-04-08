@@ -2992,11 +2992,43 @@ export default function SalesDashboard() {
                           Start the next run, monitor live progress, and review health before you change settings.
                         </p>
                       </div>
-                      {selectedCampaignAnalytics ? (
-                        <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] ${healthTone(selectedCampaignAnalytics.healthScore)}`}>
-                          Health {selectedCampaignAnalytics.healthScore}/100
-                        </span>
-                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedCampaignAnalytics ? (
+                          <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] ${healthTone(selectedCampaignAnalytics.healthScore)}`}>
+                            Health {selectedCampaignAnalytics.healthScore}/100
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
+                          disabled={
+                            selectedCampaignDefinition.status === 'archived'
+                            || selectedCampaignDefinition.status === 'active'
+                            || runningCampaign
+                            || savingCampaign
+                            || hasActiveCampaign
+                          }
+                          className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {selectedCampaignDefinition.status === 'active' ? 'Running' : 'Start Run'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'pause')}
+                          disabled={savingCampaign || selectedCampaignDefinition.status !== 'active'}
+                          className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Pause
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'restart')}
+                          disabled={savingCampaign || runningCampaign || hasActiveCampaign || selectedCampaignDefinition.status === 'archived'}
+                          className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Restart
+                        </button>
+                      </div>
                     </div>
 
                     {liveCampaign && liveCampaignProgress && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id ? (
