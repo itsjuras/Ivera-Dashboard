@@ -1195,7 +1195,6 @@ export default function SalesDashboard() {
   const [runTimerNow, setRunTimerNow] = useState(Date.now())
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [campaignRunFilter, setCampaignRunFilter] = useState<'all' | 'active' | 'paused' | 'complete'>('all')
-  const [campaignRunScope, setCampaignRunScope] = useState<'selected' | 'workspace'>('selected')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -1687,14 +1686,6 @@ export default function SalesDashboard() {
 
     return rows
   }, [campaignRunFilter, campaigns, latestCampaignRuns, liveCampaign, liveCampaignProgress, pendingRun, selectedCampaignDefinition])
-  const displayedCampaignRuns = campaignRunScope === 'workspace' || !selectedCampaignDefinition
-    ? (campaignRunFilter === 'all'
-      ? latestCampaignRuns
-      : latestCampaignRuns.filter((row) => {
-          const campaign = campaigns.find((item) => item.id === row.id)
-          return campaign?.status === campaignRunFilter
-        }))
-    : selectedCampaignRuns
 
   const engagedProspects = useMemo(
     () =>
@@ -3114,35 +3105,15 @@ export default function SalesDashboard() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-semibold text-neutral-900">
-                  {campaignRunScope === 'workspace' || !selectedCampaignDefinition
-                    ? 'All Workspace Runs'
-                    : `${selectedCampaignDefinition.name} Runs`}
+                  {selectedCampaignDefinition ? `${selectedCampaignDefinition.name} Runs` : 'Recent Runs'}
                 </p>
                 <p className="mt-1 text-xs text-neutral-500">
-                  {campaignRunScope === 'workspace' || !selectedCampaignDefinition
-                    ? 'Run history across all campaigns'
-                    : 'Run history and live status for the selected campaign'}
+                  {selectedCampaignDefinition
+                    ? 'All recorded runs and live status for the selected campaign'
+                    : 'Run history across all campaigns'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {selectedCampaignDefinition ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setCampaignRunScope('selected')}
-                      className={tabButtonClass(campaignRunScope === 'selected')}
-                    >
-                      Selected Campaign
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCampaignRunScope('workspace')}
-                      className={tabButtonClass(campaignRunScope === 'workspace')}
-                    >
-                      All Workspace
-                    </button>
-                  </>
-                ) : null}
                 {([
                   ['all', 'All'],
                   ['active', 'Active'],
@@ -3161,15 +3132,15 @@ export default function SalesDashboard() {
               </div>
             </div>
             <ListCard
-              title={`${displayedCampaignRuns.length} ${displayedCampaignRuns.length === 1 ? 'run' : 'runs'}`}
+              title={`${selectedCampaignRuns.length} ${selectedCampaignRuns.length === 1 ? 'run' : 'runs'}`}
               subtitle={
                 campaignRunFilter === 'all'
-                  ? campaignRunScope === 'workspace' || !selectedCampaignDefinition
-                    ? 'Showing all recorded workspace runs'
-                    : 'Showing all recorded runs for this campaign'
+                  ? selectedCampaignDefinition
+                    ? 'Showing all recorded runs for this campaign'
+                    : 'Showing all recorded runs'
                   : `Filtered to ${campaignRunFilter} runs`
               }
-              rows={displayedCampaignRuns}
+              rows={selectedCampaignRuns}
               emptyLabel="No runs yet"
               onRowClick={setSelectedRunId}
             />
