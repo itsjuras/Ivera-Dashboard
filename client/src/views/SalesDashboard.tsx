@@ -2073,7 +2073,12 @@ export default function SalesDashboard() {
       )
       setSelectedCampaignId(data.campaign.id)
       markCampaignHealthSuggestionResolved()
-      setAdminActionMessage(data.message || 'Campaign saved.')
+      const scheduleDays = (data.campaign.schedule_days || ['tue', 'wed', 'thu'])
+        .map((day) => day.slice(0, 1).toUpperCase() + day.slice(1))
+        .join(', ')
+      setAdminActionMessage(
+        `${data.message || 'Campaign saved.'} Persisted at ${data.campaign.num_leads_per_run} leads/run · ${scheduleDays} · ${data.campaign.schedule_time_local || '08:00'} ${data.campaign.schedule_timezone || 'America/Vancouver'}.`,
+      )
       await Promise.all([refreshStats(), refreshCampaignDefinitions()])
     } catch (err) {
       setAdminActionError(err instanceof Error ? err.message : 'Failed to save campaign.')
