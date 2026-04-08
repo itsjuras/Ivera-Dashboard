@@ -2939,7 +2939,7 @@ export default function SalesDashboard() {
                             disabled={!canStart}
                             className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {campaign.status === 'active' ? 'Running' : 'Start'}
+                            {hasActiveCampaign ? 'Run Locked' : 'Run'}
                           </button>
                           <button
                             type="button"
@@ -3003,14 +3003,13 @@ export default function SalesDashboard() {
                           onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
                           disabled={
                             selectedCampaignDefinition.status === 'archived'
-                            || selectedCampaignDefinition.status === 'active'
                             || runningCampaign
                             || savingCampaign
                             || hasActiveCampaign
                           }
                           className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {selectedCampaignDefinition.status === 'active' ? 'Running' : 'Run Campaign'}
+                          {hasActiveCampaign ? 'Run Locked' : 'Run Campaign'}
                         </button>
                         <button
                           type="button"
@@ -3058,14 +3057,17 @@ export default function SalesDashboard() {
                             onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
                             disabled={
                               selectedCampaignDefinition.status === 'archived'
-                              || selectedCampaignDefinition.status === 'active'
                               || runningCampaign
                               || savingCampaign
                               || hasActiveCampaign
                             }
                             className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {hasManualOverride ? `Run ${Math.round(parsedManualOverride)} Leads` : 'Run Campaign'}
+                            {hasActiveCampaign
+                              ? 'Run Locked'
+                              : hasManualOverride
+                                ? `Run ${Math.round(parsedManualOverride)} Leads`
+                                : 'Run Campaign'}
                           </button>
                         </div>
                       </div>
