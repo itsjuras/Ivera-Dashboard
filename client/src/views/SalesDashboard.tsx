@@ -2383,6 +2383,214 @@ export default function SalesDashboard() {
         </Suspense>
       ) : activeTab === 'outreach' ? (
         <div className="space-y-4">
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-6">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-900">Lead Activity</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Live lead activity with time and layer filters. Showing {leadActivity.length}{' '}
+                  {leadActivity.length === 1 ? 'day' : 'days'} in {overviewWindowLabel.toLowerCase()}.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 lg:items-end">
+                <div className="flex flex-wrap items-center gap-2">
+                  {[7, 14, 30].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setOverviewDays(days as OverviewDays)}
+                      className={tabButtonClass(overviewDays === days)}
+                    >
+                      {days}d
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setOverviewDays(0)}
+                    className={tabButtonClass(overviewDays === 0)}
+                  >
+                    All Time
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
+                    <SlidersHorizontal size={12} />
+                    Layers
+                  </span>
+                  {layerOptions.map((layer) => (
+                    <button
+                      key={layer.key}
+                      type="button"
+                      onClick={() =>
+                        setChartLayers((current) => ({
+                          ...current,
+                          [layer.key]: !current[layer.key],
+                        }))
+                      }
+                      className={tabButtonClass(chartLayers[layer.key])}
+                    >
+                      {layer.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={leadActivity} barGap={6}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                  <XAxis
+                    dataKey="day"
+                    interval={0}
+                    minTickGap={0}
+                    height={56}
+                    angle={-35}
+                    textAnchor="end"
+                    tick={{ fontSize: 12, fill: '#a3a3a3' }}
+                    axisLine={{ stroke: '#e5e5e5' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12, fill: '#a3a3a3' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: 8,
+                      fontSize: 13,
+                    }}
+                  />
+                  {chartLayers.sent && <Bar dataKey="sent" stackId="activity" fill="#d4d4d4" radius={[4, 4, 0, 0]} />}
+                  {chartLayers.replied && <Bar dataKey="replied" stackId="activity" fill="#93c5fd" radius={[4, 4, 0, 0]} />}
+                  {chartLayers.booked && <Bar dataKey="booked" stackId="activity" fill="#171717" radius={[4, 4, 0, 0]} />}
+                  {chartLayers.unsubscribed && <Bar dataKey="unsubscribed" stackId="activity" fill="#fca5a5" radius={[4, 4, 0, 0]} />}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
+            {latestRunDiagnostics ? (
+              <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-neutral-900">Latest Funnel</h3>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Where the most recent run narrowed from search to sent outreach
+                    </p>
+                  </div>
+                  <p className="text-xs text-neutral-400">
+                    target {latestRunDiagnostics.requested_leads ?? '—'} · effective {latestRunDiagnostics.effective_run_limit ?? '—'}
+                  </p>
+                </div>
+                <p className="mt-3 text-xs text-neutral-500">
+                  {reportStatusLabel(latestRunDiagnostics.report_status, latestRunDiagnostics.report_error_message)}
+                </p>
+                <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Raw</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.raw_candidates ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Exa candidates returned</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Fresh</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.fresh_candidates ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">After dedupe</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.qualified ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Scored 7/10 or higher</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Found</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.email_found ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Personal contact found</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.sent ?? '—'}</p>
+                    <p className="mt-1 text-[11px] text-neutral-500">Delivered into the run</p>
+                  </div>
+                </div>
+                {latestRunInsights.length ? (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
+                    <div className="mt-3 space-y-2">
+                      {latestRunInsights.map((insight) => (
+                        <p key={insight} className="text-sm text-neutral-700">
+                          {insight}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {latestRunActions.length ? (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                    <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
+                    <div className="mt-3 space-y-2">
+                      {latestRunActions.map((action) => (
+                        <p key={action} className="text-sm text-neutral-700">
+                          {action}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {followUpPerformance.length ? (
+                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white/75 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Follow-Up Branch Performance</p>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          How each engagement branch is performing across tracked follow-up touches for this workspace
+                        </p>
+                      </div>
+                      <p className="text-xs text-neutral-400">{followUpPerformance.reduce((sum, branch) => sum + branch.sent, 0)} follow-up sends tracked</p>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {followUpPerformance.map((branch) => (
+                        <div key={branch.branch} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3">
+                          <div className="grid min-w-[640px] grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.8fr))] gap-2 text-sm">
+                          <div>
+                            <p className="font-medium text-neutral-900">{branchLabel(branch.branch)}</p>
+                            <p className="mt-1 text-xs text-neutral-500">{branch.leads} leads in branch</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.sent}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.replied}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.booked}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
+                            <p className="mt-1 font-medium text-neutral-900">{branch.bounced}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 font-medium text-neutral-900">{replyRate(branch.replied, branch.leads)}</p>
+                          </div>
+                        </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -2722,214 +2930,6 @@ export default function SalesDashboard() {
             emptyLabel="No runs yet"
             onRowClick={setSelectedRunId}
           />
-
-          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-6">
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-neutral-900">Lead Activity</h3>
-                <p className="mt-1 text-xs text-neutral-500">
-                  Live lead activity with time and layer filters. Showing {leadActivity.length}{' '}
-                  {leadActivity.length === 1 ? 'day' : 'days'} in {overviewWindowLabel.toLowerCase()}.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 lg:items-end">
-                <div className="flex flex-wrap items-center gap-2">
-                  {[7, 14, 30].map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => setOverviewDays(days as OverviewDays)}
-                      className={tabButtonClass(overviewDays === days)}
-                    >
-                      {days}d
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setOverviewDays(0)}
-                    className={tabButtonClass(overviewDays === 0)}
-                  >
-                    All Time
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
-                    <SlidersHorizontal size={12} />
-                    Layers
-                  </span>
-                  {layerOptions.map((layer) => (
-                    <button
-                      key={layer.key}
-                      type="button"
-                      onClick={() =>
-                        setChartLayers((current) => ({
-                          ...current,
-                          [layer.key]: !current[layer.key],
-                        }))
-                      }
-                      className={tabButtonClass(chartLayers[layer.key])}
-                    >
-                      {layer.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={leadActivity} barGap={6}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                  <XAxis
-                    dataKey="day"
-                    interval={0}
-                    minTickGap={0}
-                    height={56}
-                    angle={-35}
-                    textAnchor="end"
-                    tick={{ fontSize: 12, fill: '#a3a3a3' }}
-                    axisLine={{ stroke: '#e5e5e5' }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12, fill: '#a3a3a3' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: 8,
-                      fontSize: 13,
-                    }}
-                  />
-                  {chartLayers.sent && <Bar dataKey="sent" stackId="activity" fill="#d4d4d4" radius={[4, 4, 0, 0]} />}
-                  {chartLayers.replied && <Bar dataKey="replied" stackId="activity" fill="#93c5fd" radius={[4, 4, 0, 0]} />}
-                  {chartLayers.booked && <Bar dataKey="booked" stackId="activity" fill="#171717" radius={[4, 4, 0, 0]} />}
-                  {chartLayers.unsubscribed && <Bar dataKey="unsubscribed" stackId="activity" fill="#fca5a5" radius={[4, 4, 0, 0]} />}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <MetricSection title="Outreach" icon={Send} metrics={outreachMetrics} />
-            {latestRunDiagnostics ? (
-              <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-4">
-                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-neutral-900">Latest Funnel</h3>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Where the most recent run narrowed from search to sent outreach
-                    </p>
-                  </div>
-                  <p className="text-xs text-neutral-400">
-                    target {latestRunDiagnostics.requested_leads ?? '—'} · effective {latestRunDiagnostics.effective_run_limit ?? '—'}
-                  </p>
-                </div>
-                <p className="mt-3 text-xs text-neutral-500">
-                  {reportStatusLabel(latestRunDiagnostics.report_status, latestRunDiagnostics.report_error_message)}
-                </p>
-                <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
-                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Raw</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.raw_candidates ?? '—'}</p>
-                    <p className="mt-1 text-[11px] text-neutral-500">Exa candidates returned</p>
-                  </div>
-                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Fresh</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.fresh_candidates ?? '—'}</p>
-                    <p className="mt-1 text-[11px] text-neutral-500">After dedupe</p>
-                  </div>
-                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Qualified</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.qualified ?? '—'}</p>
-                    <p className="mt-1 text-[11px] text-neutral-500">Scored 7/10 or higher</p>
-                  </div>
-                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Found</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.email_found ?? '—'}</p>
-                    <p className="mt-1 text-[11px] text-neutral-500">Personal contact found</p>
-                  </div>
-                  <div className="rounded-lg border border-neutral-100 bg-white/70 px-3 py-2.5">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">{latestRunDiagnostics.sent ?? '—'}</p>
-                    <p className="mt-1 text-[11px] text-neutral-500">Delivered into the run</p>
-                  </div>
-                </div>
-                {latestRunInsights.length ? (
-                  <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
-                    <div className="mt-3 space-y-2">
-                      {latestRunInsights.map((insight) => (
-                        <p key={insight} className="text-sm text-neutral-700">
-                          {insight}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {latestRunActions.length ? (
-                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-                    <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
-                    <div className="mt-3 space-y-2">
-                      {latestRunActions.map((action) => (
-                        <p key={action} className="text-sm text-neutral-700">
-                          {action}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {followUpPerformance.length ? (
-                  <div className="mt-4 rounded-xl border border-neutral-200 bg-white/75 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Follow-Up Branch Performance</p>
-                        <p className="mt-1 text-xs text-neutral-500">
-                          How each engagement branch is performing across tracked follow-up touches for this workspace
-                        </p>
-                      </div>
-                      <p className="text-xs text-neutral-400">{followUpPerformance.reduce((sum, branch) => sum + branch.sent, 0)} follow-up sends tracked</p>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      {followUpPerformance.map((branch) => (
-                        <div key={branch.branch} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3">
-                          <div className="grid min-w-[640px] grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.8fr))] gap-2 text-sm">
-                          <div>
-                            <p className="font-medium text-neutral-900">{branchLabel(branch.branch)}</p>
-                            <p className="mt-1 text-xs text-neutral-500">{branch.leads} leads in branch</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sent</p>
-                            <p className="mt-1 font-medium text-neutral-900">{branch.sent}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Replies</p>
-                            <p className="mt-1 font-medium text-neutral-900">{branch.replied}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked</p>
-                            <p className="mt-1 font-medium text-neutral-900">{branch.booked}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounced</p>
-                            <p className="mt-1 font-medium text-neutral-900">{branch.bounced}</p>
-                          </div>
-                          <div>
-                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
-                            <p className="mt-1 font-medium text-neutral-900">{replyRate(branch.replied, branch.leads)}</p>
-                          </div>
-                        </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
         </div>
       ) : activeTab === 'engagement' ? (
         <div className="space-y-4">
