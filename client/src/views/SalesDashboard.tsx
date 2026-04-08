@@ -895,6 +895,14 @@ function MetricSection({
   )
 }
 
+function guidedOpsToneClass(tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet') {
+  if (tone === 'blue') return 'border-blue-200 bg-blue-50/70'
+  if (tone === 'amber') return 'border-amber-200 bg-amber-50/70'
+  if (tone === 'emerald') return 'border-emerald-200 bg-emerald-50/70'
+  if (tone === 'violet') return 'border-violet-200 bg-violet-50/70'
+  return 'border-neutral-200 bg-white/80'
+}
+
 function ListCard({
   title,
   subtitle,
@@ -2076,6 +2084,99 @@ export default function SalesDashboard() {
     setProspectHistory(null)
   }
 
+  const guidedOpsCards = [
+    liveCampaign && liveCampaignProgress
+      ? {
+          id: 'live-run',
+          tone: liveCampaignProgress.isComplete ? 'emerald' : 'neutral',
+          label: liveCampaignProgress.isComplete ? 'Run Complete' : 'Live Run',
+          title: pendingRun?.title || formatCampaignRunTitle(liveCampaign),
+          detail: liveCampaignProgress.summary,
+          actionLabel: 'Open Outreach',
+          onClick: () => {
+            setViewMode('dashboard')
+            setActiveTab('outreach')
+          },
+        }
+      : (role === 'ivera_admin' && selectedCampaignDefinition && !hasActiveCampaign
+        ? {
+            id: 'next-run',
+            tone: 'blue' as const,
+            label: 'Next Move',
+            title: `Start ${selectedCampaignDefinition.name}`,
+            detail: `${selectedCampaignDefinition.num_leads_per_run} leads/run ready from the selected campaign.`,
+            actionLabel: 'Open Campaign Setup',
+            onClick: () => {
+              setSelectedCampaignId(selectedCampaignDefinition.id)
+              setViewMode('editor')
+            },
+          }
+        : null),
+    hotQueueTasks.length
+      ? {
+          id: 'hot-queue',
+          tone: 'amber' as const,
+          label: 'Needs Attention',
+          title: `${hotQueueTasks.length} hot ${hotQueueTasks.length === 1 ? 'reply' : 'replies'} waiting`,
+          detail: 'High-priority replies and booked meetings are sitting in the inbox.',
+          actionLabel: 'Open Pipeline',
+          onClick: () => {
+            setViewMode('dashboard')
+            setActiveTab('pipeline')
+          },
+        }
+      : null,
+    overdueTasks.length
+      ? {
+          id: 'overdue',
+          tone: 'amber' as const,
+          label: 'Task Pressure',
+          title: `${overdueTasks.length} overdue ${overdueTasks.length === 1 ? 'task' : 'tasks'}`,
+          detail: 'Some next steps are slipping past their due dates.',
+          actionLabel: 'Resolve Tasks',
+          onClick: () => {
+            setViewMode('dashboard')
+            setActiveTab('pipeline')
+          },
+        }
+      : null,
+    handoffOpportunities.length
+      ? {
+          id: 'handoff',
+          tone: 'violet' as const,
+          label: 'Human Handoff',
+          title: `${handoffOpportunities.length} unowned ${handoffOpportunities.length === 1 ? 'opportunity' : 'opportunities'}`,
+          detail: 'Engaged or high-priority deals need a human owner.',
+          actionLabel: 'Claim Deals',
+          onClick: () => {
+            setViewMode('dashboard')
+            setActiveTab('pipeline')
+          },
+        }
+      : null,
+    selectedCampaignAnalytics && selectedCampaignAnalytics.healthScore < 65
+      ? {
+          id: 'campaign-health',
+          tone: 'blue' as const,
+          label: 'Improve',
+          title: `${selectedCampaignDefinition?.name || 'Selected campaign'} health is ${selectedCampaignAnalytics.healthScore}/100`,
+          detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
+          actionLabel: 'Edit Campaign',
+          onClick: () => {
+            setViewMode('editor')
+          },
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    id: string
+    tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
+    label: string
+    title: string
+    detail: string
+    actionLabel: string
+    onClick: () => void
+  }>
+
   if (!stats && !error) {
     return (
       <div className="mx-auto flex max-w-7xl justify-center p-8 pt-24">
@@ -2104,6 +2205,31 @@ export default function SalesDashboard() {
         title="Sales Agent"
         subtitle="Outbound campaign performance and prospect pipeline"
       />
+
+      {guidedOpsCards.length ? (
+        <div className="mb-5 rounded-xl border border-neutral-200/60 bg-white/70 p-4">
+          <div className="mb-4 flex flex-col gap-1">
+            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Guided Ops</p>
+            <p className="text-sm text-neutral-700">Start here when you want the app to point you at the next highest-value move.</p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+            {guidedOpsCards.map((card) => (
+              <div key={card.id} className={`rounded-xl border p-4 ${guidedOpsToneClass(card.tone)}`}>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">{card.label}</p>
+                <p className="mt-2 text-sm font-semibold text-neutral-900">{card.title}</p>
+                <p className="mt-2 min-h-[40px] text-xs leading-relaxed text-neutral-600">{card.detail}</p>
+                <button
+                  type="button"
+                  onClick={card.onClick}
+                  className="mt-4 rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-neutral-800"
+                >
+                  {card.actionLabel}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Top-level view switcher */}
       <div className="mb-5 flex items-center gap-3">
