@@ -24,7 +24,9 @@ import {
   bookingRate,
   branchLabel,
   buildCampaignAnalytics,
+  healthTone,
   replyRate,
+  sourceLabel,
   unsubscribeRate,
 } from './salesAnalytics'
 
@@ -479,7 +481,7 @@ const statusColors: Record<string, string> = {
 type OverviewDays = 0 | 7 | 14 | 30
 type ProspectDays = 0 | 7 | 14 | 30
 type LayerKey = 'sent' | 'replied' | 'booked' | 'unsubscribed'
-type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'reporting' | 'leadQuality' | 'deliverability' | 'prospects'
+type TabKey = 'outreach' | 'engagement' | 'pipeline' | 'reporting' | 'leadQuality' | 'deliverability' | 'prospects' | 'editCampaign'
 type ProspectStatus = 'all' | 'sent' | 'replied' | 'booked' | 'unsubscribed'
 type ProspectScore = 'all' | 'scored' | 'high'
 type PipelineView = 'board' | 'workspace'
@@ -1102,7 +1104,6 @@ export default function SalesDashboard() {
   const { session, role, user } = useAuth()
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'dashboard' | 'editor'>('dashboard')
   const [activeTab, setActiveTab] = useState<TabKey>('outreach')
   const [overviewDays, setOverviewDays] = useState<OverviewDays>(0)
   const [prospectDays, setProspectDays] = useState<ProspectDays>(30)
@@ -1562,6 +1563,57 @@ export default function SalesDashboard() {
     () => buildRecommendedActions(selectedRun?.funnel_diagnostics),
     [selectedRun],
   )
+  const selectedCampaignRunInsights = useMemo(
+    () => buildRunInsights(selectedCampaignAnalytics?.latestRun?.funnel_diagnostics),
+    [selectedCampaignAnalytics],
+  )
+  const selectedCampaignRunActions = useMemo(
+    () => buildRecommendedActions(selectedCampaignAnalytics?.latestRun?.funnel_diagnostics),
+    [selectedCampaignAnalytics],
+  )
+  const selectedCampaignRuns = useMemo(() => {
+    if (!selectedCampaignDefinition) return latestCampaignRuns
+
+    const rows = campaigns
+      .filter((campaign) => campaign.campaign_definition_id === selectedCampaignDefinition.id)
+      .slice(0, 8)
+      .map((campaign) => ({
+        id: campaign.id,
+        title: formatCampaignRunTitle(campaign),
+        meta: `${formatRunDate(campaign.created_at)} · ${campaign.product_name}`,
+        badge: `${campaign.total_leads || 0} leads`,
+        detail: buildFunnelSummary(campaign.funnel_diagnostics) || undefined,
+        metrics: [
+          { label: 'Qualified', value: campaign.qualified_leads || 0 },
+          { label: 'Emailed', value: campaign.emailed || 0 },
+          { label: 'Replies', value: campaign.replied || 0 },
+          { label: 'Booked', value: campaign.booked || 0 },
+          { label: 'Unsub', value: campaign.unsubscribed || 0 },
+          { label: 'Bounce', value: campaign.bounced || 0 },
+          {
+            label: 'Avg Score',
+            value: typeof campaign.avg_score === 'number' ? `${campaign.avg_score.toFixed(1)}/10` : '—',
+          },
+        ],
+      }))
+
+    if (liveCampaign && liveCampaignProgress && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id) {
+      return [
+        {
+          id: `live-${liveCampaign.id}`,
+          title: pendingRun?.title || formatCampaignRunTitle(liveCampaign),
+          meta: liveCampaignProgress.summary,
+          badge: liveCampaignProgress.badge,
+          detail: buildFunnelSummary(liveCampaign.funnel_diagnostics) || undefined,
+          metrics: liveCampaignProgress.metrics,
+          interactive: false,
+        },
+        ...rows,
+      ]
+    }
+
+    return rows
+  }, [campaigns, latestCampaignRuns, liveCampaign, liveCampaignProgress, pendingRun, selectedCampaignDefinition])
 
   const engagedProspects = useMemo(
     () =>
@@ -2094,7 +2146,6 @@ export default function SalesDashboard() {
           detail: liveCampaignProgress.summary,
           actionLabel: 'Open Outreach',
           onClick: () => {
-            setViewMode('dashboard')
             setActiveTab('outreach')
           },
         }
@@ -2108,7 +2159,7 @@ export default function SalesDashboard() {
             actionLabel: 'Open Campaign Setup',
             onClick: () => {
               setSelectedCampaignId(selectedCampaignDefinition.id)
-              setViewMode('editor')
+              setActiveTab('editCampaign')
             },
           }
         : null),
@@ -2121,7 +2172,6 @@ export default function SalesDashboard() {
           detail: 'High-priority replies and booked meetings are sitting in the inbox.',
           actionLabel: 'Open Pipeline',
           onClick: () => {
-            setViewMode('dashboard')
             setActiveTab('pipeline')
           },
         }
@@ -2135,7 +2185,6 @@ export default function SalesDashboard() {
           detail: 'Some next steps are slipping past their due dates.',
           actionLabel: 'Resolve Tasks',
           onClick: () => {
-            setViewMode('dashboard')
             setActiveTab('pipeline')
           },
         }
@@ -2149,7 +2198,6 @@ export default function SalesDashboard() {
           detail: 'Engaged or high-priority deals need a human owner.',
           actionLabel: 'Claim Deals',
           onClick: () => {
-            setViewMode('dashboard')
             setActiveTab('pipeline')
           },
         }
@@ -2163,7 +2211,7 @@ export default function SalesDashboard() {
           detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
           actionLabel: 'Edit Campaign',
           onClick: () => {
-            setViewMode('editor')
+            setActiveTab('editCampaign')
           },
         }
       : null,
@@ -2231,77 +2279,6 @@ export default function SalesDashboard() {
         </div>
       ) : null}
 
-      {/* Top-level view switcher */}
-      <div className="mb-5 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setViewMode('dashboard')}
-          className={`rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
-            viewMode === 'dashboard'
-              ? 'border-neutral-900 bg-neutral-900 text-white'
-              : 'border-neutral-200 bg-white/70 text-neutral-500 hover:border-neutral-400 hover:text-neutral-800'
-          }`}
-        >
-          Campaign Manager
-        </button>
-        {role === 'ivera_admin' ? (
-          <button
-            type="button"
-            onClick={() => setViewMode('editor')}
-            className={`rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
-              viewMode === 'editor'
-                ? 'border-neutral-900 bg-neutral-900 text-white'
-                : 'border-neutral-200 bg-white/70 text-neutral-500 hover:border-neutral-400 hover:text-neutral-800'
-            }`}
-          >
-            Edit Campaign
-          </button>
-        ) : null}
-      </div>
-
-      {viewMode === 'editor' ? (
-        <Suspense fallback={<div className="py-16 text-center text-sm text-neutral-400">Loading campaign editor…</div>}>
-          <LazyCampaignEditor
-            role={role ?? ''}
-            campaignDefinitions={campaignDefinitions}
-            campaignsLoading={campaignsLoading}
-            selectedCampaignId={selectedCampaignId}
-            onSelectCampaign={setSelectedCampaignId}
-            editingCampaign={editingCampaign}
-            setEditingCampaign={setEditingCampaign}
-            selectedCampaignDefinition={selectedCampaignDefinition}
-            selectedCampaignAnalytics={selectedCampaignAnalytics}
-            showNewCampaignForm={showNewCampaignForm}
-            setShowNewCampaignForm={setShowNewCampaignForm}
-            newCampaignDraft={newCampaignDraft}
-            setNewCampaignDraft={setNewCampaignDraft}
-            manualLeadOverride={manualLeadOverride}
-            setManualLeadOverride={setManualLeadOverride}
-            savingCampaign={savingCampaign}
-            runningCampaign={runningCampaign}
-            runStartDisabled={runStartDisabled}
-            hasActiveCampaign={hasActiveCampaign}
-            adminActionMessage={adminActionMessage}
-            adminActionError={adminActionError}
-            liveCampaign={liveCampaign}
-            liveCampaignProgress={liveCampaignProgress}
-            pendingRun={pendingRun}
-            latestCampaignRuns={latestCampaignRuns}
-            setSelectedRunId={setSelectedRunId}
-            selectedRun={selectedRun}
-            selectedRunInsights={selectedRunInsights}
-            selectedRunActions={selectedRunActions}
-            followUpPerformance={followUpPerformance}
-            onRunCampaign={handleRunCampaign}
-            onSaveCampaign={saveCampaignDefinition}
-            onSetDefault={setDefaultCampaign}
-            onCreateCampaign={createCampaignDefinition}
-            onCampaignAction={handleCampaignAction}
-          />
-        </Suspense>
-      ) : null}
-
-      {viewMode === 'dashboard' ? (
       <>
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <button
@@ -2353,10 +2330,399 @@ export default function SalesDashboard() {
         >
           Prospects
         </button>
+        {role === 'ivera_admin' ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab('editCampaign')}
+            className={tabButtonClass(activeTab === 'editCampaign')}
+          >
+            Edit Campaign
+          </button>
+        ) : null}
       </div>
 
-      {activeTab === 'outreach' ? (
+      {activeTab === 'editCampaign' ? (
+        <Suspense fallback={<div className="py-16 text-center text-sm text-neutral-400">Loading campaign editor…</div>}>
+          <LazyCampaignEditor
+            role={role ?? ''}
+            campaignDefinitions={campaignDefinitions}
+            campaignsLoading={campaignsLoading}
+            selectedCampaignId={selectedCampaignId}
+            onSelectCampaign={setSelectedCampaignId}
+            editingCampaign={editingCampaign}
+            setEditingCampaign={setEditingCampaign}
+            selectedCampaignDefinition={selectedCampaignDefinition}
+            selectedCampaignAnalytics={selectedCampaignAnalytics}
+            showNewCampaignForm={showNewCampaignForm}
+            setShowNewCampaignForm={setShowNewCampaignForm}
+            newCampaignDraft={newCampaignDraft}
+            setNewCampaignDraft={setNewCampaignDraft}
+            manualLeadOverride={manualLeadOverride}
+            setManualLeadOverride={setManualLeadOverride}
+            savingCampaign={savingCampaign}
+            runningCampaign={runningCampaign}
+            runStartDisabled={runStartDisabled}
+            hasActiveCampaign={hasActiveCampaign}
+            adminActionMessage={adminActionMessage}
+            adminActionError={adminActionError}
+            liveCampaign={liveCampaign}
+            liveCampaignProgress={liveCampaignProgress}
+            pendingRun={pendingRun}
+            latestCampaignRuns={latestCampaignRuns}
+            setSelectedRunId={setSelectedRunId}
+            selectedRun={selectedRun}
+            selectedRunInsights={selectedRunInsights}
+            selectedRunActions={selectedRunActions}
+            followUpPerformance={followUpPerformance}
+            onRunCampaign={handleRunCampaign}
+            onSaveCampaign={saveCampaignDefinition}
+            onSetDefault={setDefaultCampaign}
+            onCreateCampaign={createCampaignDefinition}
+            onCampaignAction={handleCampaignAction}
+          />
+        </Suspense>
+      ) : activeTab === 'outreach' ? (
         <div className="space-y-4">
+          <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Outreach Operations</p>
+                <h3 className="mt-1 text-sm font-semibold text-neutral-900">Run, monitor, and review campaigns here</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Outreach is now the operational home for campaign status, live runs, analytics, and recent run history.
+                </p>
+              </div>
+              {selectedCampaignDefinition ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('editCampaign')}
+                  className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition hover:border-neutral-300"
+                >
+                  Edit Settings
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaigns</p>
+                    <p className="mt-1 text-xs text-neutral-500">Choose the campaign you want to run or review.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('editCampaign')
+                      setShowNewCampaignForm(true)
+                    }}
+                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800"
+                  >
+                    Add Campaign
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {campaignDefinitions.map((campaign) => {
+                    const analytics = campaignAnalyticsByDefinition.get(campaign.id) ?? null
+                    const isSelected = selectedCampaignId === campaign.id
+                    const canStart =
+                      campaign.status !== 'archived' &&
+                      campaign.status !== 'active' &&
+                      !runningCampaign &&
+                      !savingCampaign &&
+                      !hasActiveCampaign
+
+                    return (
+                      <div
+                        key={campaign.id}
+                        onClick={() => setSelectedCampaignId(campaign.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setSelectedCampaignId(campaign.id)
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className={`rounded-2xl border px-4 py-4 text-left transition ${
+                          isSelected
+                            ? 'border-neutral-900 bg-neutral-50 shadow-sm'
+                            : 'border-neutral-200 bg-white/80 hover:border-neutral-300 hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-neutral-900">{campaign.name}</p>
+                              {campaign.is_default ? (
+                                <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                                  Default
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 truncate text-xs text-neutral-500">{campaign.product_name}</p>
+                            <p className="mt-2 text-xs text-neutral-500">
+                              {analytics?.latestRun
+                                ? `Last run ${formatRunDate(analytics.latestRun.created_at)}`
+                                : 'No runs yet'}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {analytics ? (
+                              <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${healthTone(analytics.healthScore)}`}>
+                                Health {analytics.healthScore}/100
+                              </span>
+                            ) : null}
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
+                              {campaign.status}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Runs</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics?.totalRuns ?? 0}</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Sent</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics?.sent ?? 0}</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{analytics ? replyRate(analytics.replied, analytics.sent) : '—'}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleRunCampaign(campaign.id)
+                            }}
+                            disabled={!canStart}
+                            className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {campaign.status === 'active' ? 'Running' : 'Start'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'pause')
+                            }}
+                            disabled={savingCampaign || campaign.status !== 'active'}
+                            className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Pause
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'restart')
+                            }}
+                            disabled={savingCampaign || runningCampaign || hasActiveCampaign || campaign.status === 'archived'}
+                            className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Restart
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleCampaignAction(campaign.id, 'archive')
+                            }}
+                            disabled={savingCampaign || campaign.status === 'archived'}
+                            className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Archive
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {selectedCampaignDefinition ? (
+                  <div className="rounded-2xl border border-neutral-200 bg-white/80 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-neutral-400">Selected Campaign</p>
+                        <h4 className="mt-1 text-sm font-semibold text-neutral-900">{selectedCampaignDefinition.name}</h4>
+                        <p className="mt-1 text-xs text-neutral-500">
+                          Start the next run, monitor live progress, and review health before you change settings.
+                        </p>
+                      </div>
+                      {selectedCampaignAnalytics ? (
+                        <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] ${healthTone(selectedCampaignAnalytics.healthScore)}`}>
+                          Health {selectedCampaignAnalytics.healthScore}/100
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {liveCampaign && liveCampaignProgress && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id ? (
+                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <p className="text-[11px] tracking-widest uppercase text-emerald-700">Live Run</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun?.title || formatCampaignRunTitle(liveCampaign)}</p>
+                            <p className="mt-1 text-xs text-neutral-600">{liveCampaignProgress.summary}</p>
+                          </div>
+                          <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                            {liveCampaignProgress.badge}
+                          </span>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/90">
+                          <div
+                            className="h-full rounded-full bg-emerald-500 transition-all"
+                            style={{ width: `${Math.max(6, liveCampaignProgress.progressPercent)}%` }}
+                          />
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
+                          {liveCampaignProgress.metrics.map((metric) => (
+                            <div key={metric.label} className="rounded-lg border border-emerald-100 bg-white/90 px-3 py-2">
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">{metric.label}</p>
+                              <p className="mt-1 text-sm font-semibold text-neutral-900">{metric.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedCampaignAnalytics ? (
+                      <>
+                        <div className="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Reply Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{replyRate(selectedCampaignAnalytics.replied, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.replied} replies from {selectedCampaignAnalytics.sent} sent</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Booked Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{bookingRate(selectedCampaignAnalytics.booked, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.booked} booked</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Bounce Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{replyRate(selectedCampaignAnalytics.bounced, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.bounced} bounced</p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Unsub Rate</p>
+                            <p className="mt-1 text-lg font-semibold text-neutral-900">{unsubscribeRate(selectedCampaignAnalytics.unsubscribed, selectedCampaignAnalytics.sent)}</p>
+                            <p className="mt-1 text-[11px] text-neutral-500">{selectedCampaignAnalytics.unsubscribed} unsubscribed</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-xl border border-neutral-200 bg-white/75 p-4">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Branch Mix</p>
+                            <div className="mt-3 space-y-2">
+                              {Object.entries(selectedCampaignAnalytics.branchMix).map(([branch, value]) => (
+                                <div key={branch} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                                  <span className="text-sm font-medium text-neutral-900">{branchLabel(branch as Parameters<typeof branchLabel>[0])}</span>
+                                  <span className="text-sm font-semibold text-neutral-700">{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-neutral-200 bg-white/75 p-4">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Email Source Mix</p>
+                            <div className="mt-3 space-y-2">
+                              {Object.entries(selectedCampaignAnalytics.sourceMix).map(([source, value]) => (
+                                <div key={source} className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-2">
+                                  <span className="text-sm font-medium text-neutral-900">{sourceLabel(source as Parameters<typeof sourceLabel>[0])}</span>
+                                  <span className="text-sm font-semibold text-neutral-700">{value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {selectedCampaignAnalytics.sourcePerformance.length ? (
+                          <div className="mt-4 rounded-xl border border-neutral-200 bg-white/75 p-4">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Source Quality</p>
+                            <div className="mt-3 space-y-2">
+                              {selectedCampaignAnalytics.sourcePerformance.map((row) => (
+                                <div key={row.source} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                                  <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.7fr))]">
+                                    <div>
+                                      <p className="text-sm font-semibold text-neutral-900">{sourceLabel(row.source)}</p>
+                                      <p className="mt-1 text-xs text-neutral-500">{row.leads} leads tracked</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Replies</p>
+                                      <p className="mt-1 text-sm font-semibold text-neutral-900">{row.replied}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Booked</p>
+                                      <p className="mt-1 text-sm font-semibold text-neutral-900">{row.booked}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Bounced</p>
+                                      <p className="mt-1 text-sm font-semibold text-neutral-900">{row.bounced}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Unsub</p>
+                                      <p className="mt-1 text-sm font-semibold text-neutral-900">{row.unsubscribed}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-400">Reply Rate</p>
+                                      <p className="mt-1 text-sm font-semibold text-neutral-900">{replyRate(row.replied, row.leads)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {selectedCampaignRunInsights.length ? (
+                          <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Run Insights</p>
+                            <div className="mt-3 space-y-2">
+                              {selectedCampaignRunInsights.map((insight) => (
+                                <p key={insight} className="text-sm text-neutral-700">{insight}</p>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {selectedCampaignRunActions.length ? (
+                          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                            <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommended Actions</p>
+                            <div className="mt-3 space-y-2">
+                              {selectedCampaignRunActions.map((action) => (
+                                <p key={action} className="text-sm text-neutral-700">{action}</p>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4 text-sm text-neutral-600">
+                        This campaign has no tracked runs yet. Start the first run from Outreach when you’re ready.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-6 text-sm text-neutral-500">
+                    Select a campaign to run it, watch its live status, and review its analytics here.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <ListCard
+            title={selectedCampaignDefinition ? `${selectedCampaignDefinition.name} Runs` : 'Recent Runs'}
+            subtitle={selectedCampaignDefinition ? 'Run history and live status for the selected campaign' : 'Most recent runs across all campaigns'}
+            rows={selectedCampaignRuns}
+            emptyLabel="No runs yet"
+            onRowClick={setSelectedRunId}
+          />
+
           <div className="rounded-xl border border-neutral-200/60 bg-white/70 p-6">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
