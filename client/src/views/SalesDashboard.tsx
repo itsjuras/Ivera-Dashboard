@@ -170,6 +170,9 @@ interface CampaignConfig {
   product_context: string
   target_description: string
   num_leads_per_run: number
+  schedule_days?: string[]
+  schedule_time_local?: string
+  schedule_timezone?: string
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -191,6 +194,9 @@ interface CampaignDefinition {
   last_run_at?: string | null
   last_run_status?: string | null
   active_run_id?: string | null
+  schedule_days?: string[]
+  schedule_time_local?: string
+  schedule_timezone?: string
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -1169,6 +1175,9 @@ export default function SalesDashboard() {
     product_context: '',
     target_description: '',
     num_leads_per_run: 40,
+    schedule_days: ['tue', 'wed', 'thu'],
+    schedule_time_local: '08:00',
+    schedule_timezone: 'America/Vancouver',
   })
   const [savingCampaign, setSavingCampaign] = useState(false)
   const [campaignsLoading, setCampaignsLoading] = useState(false)
@@ -1450,6 +1459,9 @@ export default function SalesDashboard() {
       product_context: selectedCampaignDefinition.product_context,
       target_description: selectedCampaignDefinition.target_description,
       num_leads_per_run: selectedCampaignDefinition.num_leads_per_run,
+      schedule_days: selectedCampaignDefinition.schedule_days ?? ['tue', 'wed', 'thu'],
+      schedule_time_local: selectedCampaignDefinition.schedule_time_local ?? '08:00',
+      schedule_timezone: selectedCampaignDefinition.schedule_timezone ?? 'America/Vancouver',
       sender_name: selectedCampaignDefinition.sender_name ?? null,
       sender_email: selectedCampaignDefinition.sender_email ?? null,
       reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,

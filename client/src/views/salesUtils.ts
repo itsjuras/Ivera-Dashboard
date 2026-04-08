@@ -12,6 +12,9 @@ export interface CampaignConfig {
   product_context: string
   target_description: string
   num_leads_per_run: number
+  schedule_days?: string[]
+  schedule_time_local?: string
+  schedule_timezone?: string
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -33,6 +36,9 @@ export interface CampaignDefinition {
   last_run_at?: string | null
   last_run_status?: string | null
   active_run_id?: string | null
+  schedule_days?: string[]
+  schedule_time_local?: string
+  schedule_timezone?: string
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null

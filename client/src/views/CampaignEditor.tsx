@@ -2,6 +2,21 @@ import React from 'react'
 import { Plus } from 'lucide-react'
 import { statusColors, type CampaignConfig, type CampaignDefinition } from './salesUtils'
 
+const SCHEDULE_DAY_OPTIONS = [
+  { value: 'mon', label: 'Mon' },
+  { value: 'tue', label: 'Tue' },
+  { value: 'wed', label: 'Wed' },
+  { value: 'thu', label: 'Thu' },
+  { value: 'fri', label: 'Fri' },
+] as const
+
+const SCHEDULE_TIMEZONE_OPTIONS = [
+  { value: 'America/Vancouver', label: 'Pacific' },
+  { value: 'America/Edmonton', label: 'Mountain' },
+  { value: 'America/Winnipeg', label: 'Central' },
+  { value: 'America/Toronto', label: 'Eastern' },
+] as const
+
 interface CampaignEditorProps {
   role: string
   campaignDefinitions: CampaignDefinition[]
@@ -62,6 +77,17 @@ export default function CampaignEditor({
   onSetDefault,
   onCreateCampaign,
 }: CampaignEditorProps) {
+  const toggleScheduleDay = (
+    current: string[] | undefined,
+    day: string,
+  ) => {
+    const set = new Set(current && current.length ? current : ['tue', 'wed', 'thu'])
+    if (set.has(day)) set.delete(day)
+    else set.add(day)
+    const next = Array.from(set)
+    return next.length ? next : ['tue', 'wed', 'thu']
+  }
+
   return (
     <div className="space-y-6">
       {role === 'ivera_admin' ? (
@@ -85,6 +111,9 @@ export default function CampaignEditor({
                     product_context: editingCampaign?.product_context || selectedCampaignDefinition?.product_context || '',
                     target_description: editingCampaign?.target_description || selectedCampaignDefinition?.target_description || '',
                     num_leads_per_run: editingCampaign?.num_leads_per_run || selectedCampaignDefinition?.num_leads_per_run || 40,
+                    schedule_days: editingCampaign?.schedule_days || selectedCampaignDefinition?.schedule_days || ['tue', 'wed', 'thu'],
+                    schedule_time_local: editingCampaign?.schedule_time_local || selectedCampaignDefinition?.schedule_time_local || '08:00',
+                    schedule_timezone: editingCampaign?.schedule_timezone || selectedCampaignDefinition?.schedule_timezone || 'America/Vancouver',
                   })
                 }}
                 className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800"
@@ -163,6 +192,52 @@ export default function CampaignEditor({
                       className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
                     />
                   </label>
+                </div>
+                <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Scheduled Runs</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {SCHEDULE_DAY_OPTIONS.map((day) => {
+                      const active = (newCampaignDraft.schedule_days || ['tue', 'wed', 'thu']).includes(day.value)
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => setNewCampaignDraft((current) => ({
+                            ...current,
+                            schedule_days: toggleScheduleDay(current.schedule_days, day.value),
+                          }))}
+                          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                            active ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Run Time</span>
+                      <input
+                        type="time"
+                        value={newCampaignDraft.schedule_time_local || '08:00'}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, schedule_time_local: event.target.value || '08:00' }))}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Time Zone</span>
+                      <select
+                        value={newCampaignDraft.schedule_timezone || 'America/Vancouver'}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, schedule_timezone: event.target.value }))}
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                      >
+                        {SCHEDULE_TIMEZONE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 <label className="mt-3 block space-y-2">
                   <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Product Name</span>
@@ -247,6 +322,52 @@ export default function CampaignEditor({
                 className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
               />
             </label>
+          </div>
+          <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50/70 p-4">
+            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Scheduled Runs</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {SCHEDULE_DAY_OPTIONS.map((day) => {
+                const active = (editingCampaign.schedule_days || ['tue', 'wed', 'thu']).includes(day.value)
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => setEditingCampaign((current) => (current ? {
+                      ...current,
+                      schedule_days: toggleScheduleDay(current.schedule_days, day.value),
+                    } : current))}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                      active ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 bg-white text-neutral-600'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Run Time</span>
+                <input
+                  type="time"
+                  value={editingCampaign.schedule_time_local || '08:00'}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, schedule_time_local: event.target.value || '08:00' } : current))}
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Time Zone</span>
+                <select
+                  value={editingCampaign.schedule_timezone || 'America/Vancouver'}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, schedule_timezone: event.target.value } : current))}
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition focus:border-neutral-400"
+                >
+                  {SCHEDULE_TIMEZONE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <label className="mt-3 block space-y-2">
