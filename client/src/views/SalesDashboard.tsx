@@ -2316,6 +2316,18 @@ export default function SalesDashboard() {
       && campaignHealthResolution.runAt === (selectedCampaignAnalytics.latestRun?.created_at || null),
   )
 
+  type GuidedOpsCard = {
+    id: string
+    tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
+    label: string
+    priority: number
+    title: string
+    detail: string
+    actionLabel: string
+    resolved?: boolean
+    onClick: () => void
+  }
+
   const guidedOpsCards = [
     liveCampaign && liveCampaignProgress
       ? {
@@ -2402,27 +2414,7 @@ export default function SalesDashboard() {
           },
         }
       : null,
-  ].filter((card): card is {
-    id: string
-    tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
-    label: string
-    priority: number
-    title: string
-    detail: string
-    actionLabel: string
-    resolved?: boolean
-    onClick: () => void
-  } => Boolean(card)).sort((a, b) => a.priority - b.priority) as Array<{
-    id: string
-    tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
-    label: string
-    priority: number
-    title: string
-    detail: string
-    actionLabel: string
-    resolved?: boolean
-    onClick: () => void
-  }>
+  ].filter((card): card is GuidedOpsCard => Boolean(card)).sort((a, b) => a.priority - b.priority)
 
   if (!stats && !error) {
     return (
