@@ -82,6 +82,18 @@ interface PortalStats {
     bounced: number
     unsubscribed: number
   }>
+  followUpPerformanceByCampaign?: Array<{
+    campaign_definition_id: string
+    branches: Array<{
+      branch: 'clicked' | 'opened' | 'cold' | 'replied_later'
+      sent: number
+      leads: number
+      replied: number
+      booked: number
+      bounced: number
+      unsubscribed: number
+    }>
+  }>
   campaignSourcePerformance?: Array<{
     campaign_definition_id: string
     source: 'exa' | 'scraped' | 'pattern' | 'unknown'
@@ -1436,6 +1448,7 @@ export default function SalesDashboard() {
   const recentLeads = stats?.recentLeads ?? []
   const leadActivitySeries = stats?.leadActivity ?? []
   const followUpPerformance = stats?.followUpPerformance ?? []
+  const followUpPerformanceByCampaign = stats?.followUpPerformanceByCampaign ?? []
   const campaignSourcePerformance = stats?.campaignSourcePerformance ?? []
   const campaigns = stats?.campaigns ?? []
   const totalCampaignRuns = stats?.totalCampaignRuns ?? campaigns.length
@@ -1457,6 +1470,10 @@ export default function SalesDashboard() {
     () => (selectedCampaignId ? campaignAnalyticsByDefinition.get(selectedCampaignId) ?? null : null),
     [campaignAnalyticsByDefinition, selectedCampaignId],
   )
+  const selectedCampaignFollowUpPerformance = useMemo(() => {
+    if (!selectedCampaignId) return followUpPerformance
+    return followUpPerformanceByCampaign.find((entry) => entry.campaign_definition_id === selectedCampaignId)?.branches ?? []
+  }, [followUpPerformance, followUpPerformanceByCampaign, selectedCampaignId])
 
   useEffect(() => {
     if (!campaignDefinitions.length) {
@@ -2785,19 +2802,21 @@ export default function SalesDashboard() {
                     </div>
                   </div>
                 ) : null}
-                {followUpPerformance.length ? (
+                {selectedCampaignFollowUpPerformance.length ? (
                   <div className="mt-4 rounded-xl border border-neutral-200 bg-white/75 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] tracking-widest uppercase text-neutral-400">Follow-Up Branch Performance</p>
                         <p className="mt-1 text-xs text-neutral-500">
-                          How each engagement branch is performing across tracked follow-up touches for this workspace
+                          {selectedCampaignDefinition
+                            ? `How each engagement branch is performing across tracked follow-up touches for ${selectedCampaignDefinition.name}`
+                            : 'How each engagement branch is performing across tracked follow-up touches for this workspace'}
                         </p>
                       </div>
-                      <p className="text-xs text-neutral-400">{followUpPerformance.reduce((sum, branch) => sum + branch.sent, 0)} follow-up sends tracked</p>
+                      <p className="text-xs text-neutral-400">{selectedCampaignFollowUpPerformance.reduce((sum, branch) => sum + branch.sent, 0)} follow-up sends tracked</p>
                     </div>
                     <div className="mt-4 space-y-2">
-                      {followUpPerformance.map((branch) => (
+                      {selectedCampaignFollowUpPerformance.map((branch) => (
                         <div key={branch.branch} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50/70 px-3 py-3">
                           <div className="grid min-w-[640px] grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.8fr))] gap-2 text-sm">
                           <div>
