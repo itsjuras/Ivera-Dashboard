@@ -8,6 +8,8 @@ import {
   Building2,
   SlidersHorizontal,
   X,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -1124,6 +1126,7 @@ export default function SalesDashboard() {
   const [stats, setStats] = useState<PortalStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('outreach')
+  const [guidedOpsExpanded, setGuidedOpsExpanded] = useState(true)
   const [overviewDays, setOverviewDays] = useState<OverviewDays>(0)
   const [prospectDays, setProspectDays] = useState<ProspectDays>(30)
   const [prospectStatus, setProspectStatus] = useState<ProspectStatus>('all')
@@ -2205,7 +2208,8 @@ export default function SalesDashboard() {
       ? {
           id: 'live-run',
           tone: liveCampaignProgress.isComplete ? 'emerald' : 'neutral',
-          label: liveCampaignProgress.isComplete ? 'Run Complete' : 'Live Run',
+          label: liveCampaignProgress.isComplete ? 'Status' : 'Status',
+          priority: 2,
           title: pendingRun?.title || formatCampaignRunTitle(liveCampaign),
           detail: liveCampaignProgress.summary,
           actionLabel: 'Open Outreach',
@@ -2217,7 +2221,8 @@ export default function SalesDashboard() {
         ? {
             id: 'next-run',
             tone: 'blue' as const,
-            label: 'Next Move',
+            label: 'Next Step',
+            priority: 3,
             title: `Start ${selectedCampaignDefinition.name}`,
             detail: `${selectedCampaignDefinition.num_leads_per_run} leads/run ready from the selected campaign.`,
             actionLabel: 'Open Campaign Setup',
@@ -2231,7 +2236,8 @@ export default function SalesDashboard() {
       ? {
           id: 'hot-queue',
           tone: 'amber' as const,
-          label: 'Needs Attention',
+          label: 'Issue',
+          priority: 1,
           title: `${hotQueueTasks.length} hot ${hotQueueTasks.length === 1 ? 'reply' : 'replies'} waiting`,
           detail: 'High-priority replies and booked meetings are sitting in the inbox.',
           actionLabel: 'Open Pipeline',
@@ -2244,7 +2250,8 @@ export default function SalesDashboard() {
       ? {
           id: 'overdue',
           tone: 'amber' as const,
-          label: 'Task Pressure',
+          label: 'Issue',
+          priority: 1,
           title: `${overdueTasks.length} overdue ${overdueTasks.length === 1 ? 'task' : 'tasks'}`,
           detail: 'Some next steps are slipping past their due dates.',
           actionLabel: 'Resolve Tasks',
@@ -2257,7 +2264,8 @@ export default function SalesDashboard() {
       ? {
           id: 'handoff',
           tone: 'violet' as const,
-          label: 'Human Handoff',
+          label: 'Issue',
+          priority: 1,
           title: `${handoffOpportunities.length} unowned ${handoffOpportunities.length === 1 ? 'opportunity' : 'opportunities'}`,
           detail: 'Engaged or high-priority deals need a human owner.',
           actionLabel: 'Claim Deals',
@@ -2271,6 +2279,7 @@ export default function SalesDashboard() {
           id: 'campaign-health',
           tone: 'blue' as const,
           label: 'Improve',
+          priority: 2,
           title: `${selectedCampaignDefinition?.name || 'Selected campaign'} health is ${selectedCampaignAnalytics.healthScore}/100`,
           detail: latestRunActions[0] || 'Tighten targeting, source mix, or messaging before the next run.',
           actionLabel: 'Edit Campaign',
@@ -2279,10 +2288,11 @@ export default function SalesDashboard() {
           },
         }
       : null,
-  ].filter(Boolean) as Array<{
+  ].filter(Boolean).sort((a, b) => a.priority - b.priority) as Array<{
     id: string
     tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
     label: string
+    priority: number
     title: string
     detail: string
     actionLabel: string
@@ -2319,27 +2329,56 @@ export default function SalesDashboard() {
       />
 
       {guidedOpsCards.length ? (
-        <div className="mb-5 rounded-xl border border-neutral-200/60 bg-white/70 p-4">
-          <div className="mb-4 flex flex-col gap-1">
-            <p className="text-[11px] tracking-widest uppercase text-neutral-400">Guided Ops</p>
-            <p className="text-sm text-neutral-700">Start here when you want the app to point you at the next highest-value move.</p>
-          </div>
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            {guidedOpsCards.map((card) => (
-              <div key={card.id} className={`rounded-xl border p-4 ${guidedOpsToneClass(card.tone)}`}>
-                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-500">{card.label}</p>
-                <p className="mt-2 text-sm font-semibold text-neutral-900">{card.title}</p>
-                <p className="mt-2 min-h-[40px] text-xs leading-relaxed text-neutral-600">{card.detail}</p>
-                <button
-                  type="button"
-                  onClick={card.onClick}
-                  className="mt-4 rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-neutral-800"
-                >
-                  {card.actionLabel}
-                </button>
+        <div className="mb-5 rounded-xl border border-neutral-200/60 bg-white/70">
+          <button
+            type="button"
+            onClick={() => setGuidedOpsExpanded((current) => !current)}
+            className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] tracking-widest uppercase text-neutral-400">Guided Ops</p>
+              <p className="mt-1 text-sm text-neutral-700">Priority suggestions, ordered from issues to nice next moves.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-neutral-500">
+                {guidedOpsCards.length} items
+              </span>
+              {guidedOpsExpanded ? <ChevronDown size={16} className="text-neutral-500" /> : <ChevronRight size={16} className="text-neutral-500" />}
+            </div>
+          </button>
+
+          {guidedOpsExpanded ? (
+            <div className="border-t border-neutral-200/70 px-4 py-3">
+              <div className="space-y-2">
+                {guidedOpsCards.map((card) => (
+                  <div key={card.id} className="flex flex-col gap-3 rounded-lg border border-neutral-100 bg-white/80 px-3 py-3 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                          card.priority === 1
+                            ? 'bg-amber-500'
+                            : card.priority === 2
+                              ? 'bg-blue-500'
+                              : 'bg-neutral-400'
+                        }`}
+                        />
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">{card.label}</p>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-neutral-900">{card.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-neutral-600">{card.detail}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={card.onClick}
+                      className="shrink-0 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 transition hover:border-neutral-300"
+                    >
+                      {card.actionLabel}
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
