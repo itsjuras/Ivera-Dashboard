@@ -548,6 +548,32 @@ function latestRunLabel(campaigns: PortalStats['campaigns']) {
   return `Latest ${timeAgo(campaigns[0].created_at)}`
 }
 
+const BROWSER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+function dateKeyInTimeZone(iso: string, timeZone = BROWSER_TIME_ZONE) {
+  const date = new Date(iso)
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const parts = formatter.formatToParts(date)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  return year && month && day ? `${year}-${month}-${day}` : ''
+}
+
+function dateFromKey(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, (month || 1) - 1, day || 1, 12, 0, 0, 0)
+}
+
+function formatDateKeyLabel(dateKey: string) {
+  return dateFromKey(dateKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function formatRunDate(iso: string) {
   return new Intl.DateTimeFormat('en-CA', {
     month: 'short',
@@ -817,13 +843,12 @@ function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
 
   if (days === 0) {
     const sortedKeys = Array.from(
-      new Set(leads.map((lead) => new Date(lead.created_at).toISOString().slice(0, 10))),
+      new Set(leads.map((lead) => dateKeyInTimeZone(lead.created_at)).filter(Boolean)),
     ).sort()
 
     for (const key of sortedKeys) {
-      const date = new Date(`${key}T00:00:00.000Z`)
       byDay.set(key, {
-        day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        day: formatDateKeyLabel(key),
         sent: 0,
         replied: 0,
         booked: 0,
@@ -835,7 +860,7 @@ function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
       const date = new Date()
       date.setHours(0, 0, 0, 0)
       date.setDate(date.getDate() - offset)
-      const key = date.toISOString().slice(0, 10)
+      const key = dateKeyInTimeZone(date.toISOString())
       byDay.set(key, {
         day: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         sent: 0,
@@ -847,7 +872,7 @@ function buildLeadActivity(leads: PortalStats['recentLeads'], days: number) {
   }
 
   for (const lead of leads) {
-    const key = new Date(lead.created_at).toISOString().slice(0, 10)
+    const key = dateKeyInTimeZone(lead.created_at)
     const bucket = byDay.get(key)
     if (!bucket) continue
     bucket[leadStatusBucket(lead.status)] += 1
@@ -861,10 +886,10 @@ function buildLeadActivityFromSeries(series: NonNullable<PortalStats['leadActivi
 
   const filtered = days === 0
     ? series
-    : series.filter((entry) => leadWithinDays(`${entry.date}T12:00:00.000Z`, days))
+    : series.filter((entry) => leadWithinDays(dateFromKey(entry.date).toISOString(), days))
 
   return filtered.map((entry) => ({
-    day: new Date(`${entry.date}T00:00:00.000Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    day: formatDateKeyLabel(entry.date),
     sent: entry.sent,
     replied: entry.replied,
     booked: entry.booked,
@@ -875,7 +900,7 @@ function buildLeadActivityFromSeries(series: NonNullable<PortalStats['leadActivi
 function summarizeLeadActivitySeries(series: NonNullable<PortalStats['leadActivity']>, days: number) {
   const filtered = days === 0
     ? series
-    : series.filter((entry) => leadWithinDays(`${entry.date}T12:00:00.000Z`, days))
+    : series.filter((entry) => leadWithinDays(dateFromKey(entry.date).toISOString(), days))
 
   return filtered.reduce(
     (totals, entry) => ({
@@ -1195,7 +1220,7 @@ export default function SalesDashboard() {
     setError(null)
     setStats(null)
 
-    fetch(`${SALES_API}/portal/stats`, {
+    fetch(`${SALES_API}/portal/stats?timezone=${encodeURIComponent(BROWSER_TIME_ZONE)}`, {
       cache: 'no-store',
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
@@ -1865,7 +1890,7 @@ export default function SalesDashboard() {
 
   async function refreshStats() {
     if (!session?.access_token) return
-    const data = await salesRequest<PortalStats>(session.access_token, '/portal/stats')
+    const data = await salesRequest<PortalStats>(session.access_token, `/portal/stats?timezone=${encodeURIComponent(BROWSER_TIME_ZONE)}`)
     setStats(data)
   }
 
