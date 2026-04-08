@@ -918,14 +918,6 @@ function MetricSection({
   )
 }
 
-function guidedOpsToneClass(tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet') {
-  if (tone === 'blue') return 'border-blue-200 bg-blue-50/70'
-  if (tone === 'amber') return 'border-amber-200 bg-amber-50/70'
-  if (tone === 'emerald') return 'border-emerald-200 bg-emerald-50/70'
-  if (tone === 'violet') return 'border-violet-200 bg-violet-50/70'
-  return 'border-neutral-200 bg-white/80'
-}
-
 function ListCard({
   title,
   subtitle,
@@ -2288,7 +2280,16 @@ export default function SalesDashboard() {
           },
         }
       : null,
-  ].filter(Boolean).sort((a, b) => a.priority - b.priority) as Array<{
+  ].filter((card): card is {
+    id: string
+    tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
+    label: string
+    priority: number
+    title: string
+    detail: string
+    actionLabel: string
+    onClick: () => void
+  } => Boolean(card)).sort((a, b) => a.priority - b.priority) as Array<{
     id: string
     tone: 'neutral' | 'blue' | 'amber' | 'emerald' | 'violet'
     label: string
