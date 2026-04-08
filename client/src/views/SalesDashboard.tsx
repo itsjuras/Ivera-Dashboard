@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 const LazyCampaignEditor = lazy(() => import('./CampaignEditor'))
 import {
   Users,
@@ -1135,6 +1135,8 @@ export default function SalesDashboard() {
   const [reassessingCampaign, setReassessingCampaign] = useState(false)
   const [reassessInput, setReassessInput] = useState('')
   const [campaignAssessment, setCampaignAssessment] = useState<CampaignAssessment | null>(null)
+  const [reassessModalOpen, setReassessModalOpen] = useState(false)
+  const [assessmentApplied, setAssessmentApplied] = useState(false)
   const [showNewCampaignForm, setShowNewCampaignForm] = useState(false)
   const [newCampaignDraft, setNewCampaignDraft] = useState<CampaignConfig>({
     name: '',
@@ -1158,6 +1160,7 @@ export default function SalesDashboard() {
   } | null>(null)
   const [runTimerNow, setRunTimerNow] = useState(Date.now())
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [campaignRunFilter, setCampaignRunFilter] = useState<'all' | 'active' | 'paused' | 'complete'>('all')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -1183,6 +1186,7 @@ export default function SalesDashboard() {
   const [opportunityComments, setOpportunityComments] = useState<Record<string, CrmComment[]>>({})
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
   const [postingComment, setPostingComment] = useState<string | null>(null)
+  const reassessControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1392,6 +1396,8 @@ export default function SalesDashboard() {
       setEditingCampaign(null)
       setCampaignAssessment(null)
       setReassessInput('')
+      setAssessmentApplied(false)
+      setReassessModalOpen(false)
       return
     }
 
@@ -1425,6 +1431,8 @@ export default function SalesDashboard() {
       cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
     })
     setCampaignAssessment(null)
+    setAssessmentApplied(false)
+    setReassessModalOpen(false)
   }, [selectedCampaignDefinition])
 
   const overviewLeads = useMemo(
@@ -1525,7 +1533,7 @@ export default function SalesDashboard() {
   const runStartDisabled = runningCampaign || savingCampaign || hasActiveCampaign
   const latestCampaignRuns = useMemo(
     () => {
-      const rows = campaigns.slice(0, 8).map((campaign) => ({
+      const rows = campaigns.map((campaign) => ({
         id: campaign.id,
         title: formatCampaignRunTitle(campaign),
         meta: `${formatRunDate(campaign.created_at)} · ${campaign.product_name}`,
@@ -1593,11 +1601,17 @@ export default function SalesDashboard() {
     [selectedCampaignAnalytics],
   )
   const selectedCampaignRuns = useMemo(() => {
-    if (!selectedCampaignDefinition) return latestCampaignRuns
+    if (!selectedCampaignDefinition) {
+      if (campaignRunFilter === 'all') return latestCampaignRuns
+      return latestCampaignRuns.filter((row) => {
+        const campaign = campaigns.find((item) => item.id === row.id)
+        return campaign?.status === campaignRunFilter
+      })
+    }
 
     const rows = campaigns
       .filter((campaign) => campaign.campaign_definition_id === selectedCampaignDefinition.id)
-      .slice(0, 8)
+      .filter((campaign) => campaignRunFilter === 'all' || campaign.status === campaignRunFilter)
       .map((campaign) => ({
         id: campaign.id,
         title: formatCampaignRunTitle(campaign),
@@ -1634,7 +1648,7 @@ export default function SalesDashboard() {
     }
 
     return rows
-  }, [campaigns, latestCampaignRuns, liveCampaign, liveCampaignProgress, pendingRun, selectedCampaignDefinition])
+  }, [campaignRunFilter, campaigns, latestCampaignRuns, liveCampaign, liveCampaignProgress, pendingRun, selectedCampaignDefinition])
 
   const engagedProspects = useMemo(
     () =>
@@ -1998,19 +2012,28 @@ export default function SalesDashboard() {
     setReassessingCampaign(true)
     setAdminActionError(null)
     setAdminActionMessage(null)
+    setAssessmentApplied(false)
+    const controller = new AbortController()
+    reassessControllerRef.current = controller
 
     try {
       const data = await salesRequest<{ assessment: CampaignAssessment }>(session.access_token, '/campaign/reassess', {
         method: 'POST',
+        signal: controller.signal,
         body: JSON.stringify({
           admin_input: reassessInput.trim() || undefined,
         }),
       })
       setCampaignAssessment(data.assessment)
-      setAdminActionMessage('Campaign reassessment is ready to review.')
+      setAdminActionMessage('Campaign reassessment is ready to review. Nothing has been applied yet.')
     } catch (err) {
-      setAdminActionError(err instanceof Error ? err.message : 'Failed to reassess campaign.')
+      if (err instanceof Error && err.name === 'AbortError') {
+        setAdminActionMessage('Campaign reassessment cancelled.')
+      } else {
+        setAdminActionError(err instanceof Error ? err.message : 'Failed to reassess campaign.')
+      }
     } finally {
+      reassessControllerRef.current = null
       setReassessingCampaign(false)
     }
   }
@@ -2027,8 +2050,21 @@ export default function SalesDashboard() {
         num_leads_per_run: campaignAssessment.suggestedConfig.num_leads_per_run,
       }
     })
-    setAdminActionMessage('Applied reassessment suggestions to the campaign draft. Save when you are ready.')
+    setAssessmentApplied(true)
+    setAdminActionMessage('Applied reassessment suggestions to the campaign draft. Save Campaign to persist them.')
     setAdminActionError(null)
+  }
+
+  function openReassessModal() {
+    setReassessModalOpen(true)
+    setAssessmentApplied(false)
+  }
+
+  function closeReassessModal() {
+    if (reassessingCampaign && reassessControllerRef.current) {
+      reassessControllerRef.current.abort()
+    }
+    setReassessModalOpen(false)
   }
 
   async function setDefaultCampaign(definitionId: string) {
@@ -2464,10 +2500,6 @@ export default function SalesDashboard() {
             manualLeadOverride={manualLeadOverride}
             setManualLeadOverride={setManualLeadOverride}
             savingCampaign={savingCampaign}
-            reassessingCampaign={reassessingCampaign}
-            reassessInput={reassessInput}
-            setReassessInput={setReassessInput}
-            assessment={campaignAssessment}
             runningCampaign={runningCampaign}
             runStartDisabled={runStartDisabled}
             hasActiveCampaign={hasActiveCampaign}
@@ -2484,8 +2516,7 @@ export default function SalesDashboard() {
             followUpPerformance={followUpPerformance}
             onRunCampaign={handleRunCampaign}
             onSaveCampaign={saveCampaignDefinition}
-            onReassessCampaign={handleReassessCampaign}
-            onApplyAssessment={applyCampaignAssessment}
+            onOpenReassessModal={openReassessModal}
             onSetDefault={setDefaultCampaign}
             onCreateCampaign={createCampaignDefinition}
             onCampaignAction={handleCampaignAction}
@@ -3033,13 +3064,42 @@ export default function SalesDashboard() {
             </div>
           </div>
 
-          <ListCard
-            title={selectedCampaignDefinition ? `${selectedCampaignDefinition.name} Runs` : 'Recent Runs'}
-            subtitle={selectedCampaignDefinition ? 'Run history and live status for the selected campaign' : 'Most recent runs across all campaigns'}
-            rows={selectedCampaignRuns}
-            emptyLabel="No runs yet"
-            onRowClick={setSelectedRunId}
-          />
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-neutral-900">
+                  {selectedCampaignDefinition ? `${selectedCampaignDefinition.name} Runs` : 'Recent Runs'}
+                </p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  {selectedCampaignDefinition ? 'Run history and live status for the selected campaign' : 'Run history across all campaigns'}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  ['all', 'All'],
+                  ['active', 'Active'],
+                  ['paused', 'Paused'],
+                  ['complete', 'Complete'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCampaignRunFilter(value)}
+                    className={tabButtonClass(campaignRunFilter === value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ListCard
+              title={`${selectedCampaignRuns.length} ${selectedCampaignRuns.length === 1 ? 'run' : 'runs'}`}
+              subtitle={campaignRunFilter === 'all' ? 'Showing all recorded runs' : `Filtered to ${campaignRunFilter} runs`}
+              rows={selectedCampaignRuns}
+              emptyLabel="No runs yet"
+              onRowClick={setSelectedRunId}
+            />
+          </div>
         </div>
       ) : activeTab === 'engagement' ? (
         <div className="space-y-4">
@@ -4397,6 +4457,171 @@ export default function SalesDashboard() {
                   {crmLoading ? 'Loading account details…' : 'No account details available.'}
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {reassessModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm px-4 py-8">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-neutral-200 px-6 py-5">
+              <div>
+                <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Reassessment</p>
+                <h3 className="mt-1 text-lg font-semibold text-neutral-900">{selectedCampaignDefinition?.name || 'Selected Campaign'}</h3>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Review suggestions in one place, then decide whether to apply them to the draft.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeReassessModal}
+                className="rounded-full border border-neutral-200 bg-white p-2 text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-5">
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggestions</p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Add or edit instructions here before you run reassessment. Automatic health and deliverability hints are included behind the scenes.
+                    </p>
+                  </div>
+                  {assessmentApplied ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                      Applied To Draft
+                    </span>
+                  ) : campaignAssessment ? (
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-blue-700">
+                      Review Ready
+                    </span>
+                  ) : null}
+                </div>
+                <textarea
+                  value={reassessInput}
+                  onChange={(event) => {
+                    setReassessInput(event.target.value)
+                    setAssessmentApplied(false)
+                  }}
+                  rows={4}
+                  placeholder="Optional: keep Canada primary, focus on mortgage brokers, avoid weak-fit segments..."
+                  className="mt-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                />
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleReassessCampaign()}
+                    disabled={reassessingCampaign}
+                    className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {reassessingCampaign ? 'Reassessing...' : campaignAssessment ? 'Run Again' : 'Run Reassessment'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReassessInput('')
+                      setCampaignAssessment(null)
+                      setAssessmentApplied(false)
+                    }}
+                    disabled={reassessingCampaign}
+                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeReassessModal}
+                    className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700"
+                  >
+                    {reassessingCampaign ? 'Cancel Reassessment' : 'Close'}
+                  </button>
+                </div>
+              </div>
+
+              {reassessingCampaign ? (
+                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-900">Reassessing campaign</p>
+                      <p className="mt-1 text-xs text-neutral-600">
+                        Reviewing recent lead quality, bounce pressure, and campaign guidance now.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {campaignAssessment ? (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-[11px] tracking-widest uppercase text-blue-700">Assessment Summary</p>
+                        <p className="mt-1 text-sm text-neutral-700">{campaignAssessment.summary}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={applyCampaignAssessment}
+                        disabled={assessmentApplied}
+                        className="rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 transition hover:border-blue-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {assessmentApplied ? 'Applied' : 'Apply Suggested Changes'}
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs text-neutral-500">
+                      {assessmentApplied
+                        ? 'These suggestions are now in the draft fields behind this modal. Save Campaign to persist them.'
+                        : 'Nothing has been changed in the draft yet.'}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-xl border border-emerald-200 bg-white/80 p-4">
+                      <p className="text-[11px] tracking-widest uppercase text-emerald-700">Strengths</p>
+                      <div className="mt-3 space-y-2">
+                        {campaignAssessment.strengths.map((item) => (
+                          <p key={item} className="text-sm text-neutral-700">{item}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-amber-200 bg-white/80 p-4">
+                      <p className="text-[11px] tracking-widest uppercase text-amber-700">Issues</p>
+                      <div className="mt-3 space-y-2">
+                        {campaignAssessment.issues.map((item) => (
+                          <p key={item} className="text-sm text-neutral-700">{item}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-blue-200 bg-white/80 p-4">
+                      <p className="text-[11px] tracking-widest uppercase text-blue-700">Recommendations</p>
+                      <div className="mt-3 space-y-2">
+                        {campaignAssessment.recommendations.map((item) => (
+                          <p key={item} className="text-sm text-neutral-700">{item}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {campaignAssessment.changeSet.length ? (
+                    <div className="rounded-xl border border-neutral-200 bg-white/80 p-4">
+                      <p className="text-[11px] tracking-widest uppercase text-neutral-400">Suggested Changes</p>
+                      <div className="mt-3 space-y-2">
+                        {campaignAssessment.changeSet.map((change, index) => (
+                          <div key={`${change.field}-${index}`} className="rounded-lg border border-neutral-100 bg-neutral-50/80 px-3 py-3">
+                            <p className="text-sm font-semibold text-neutral-900">{change.field}</p>
+                            <p className="mt-1 text-xs text-neutral-500">{change.reason}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
