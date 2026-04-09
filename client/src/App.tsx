@@ -72,7 +72,7 @@ function DashboardShell() {
   }
 
   return (
-    <div className="relative h-screen flex flex-col">
+    <div className="relative min-h-screen flex flex-col">
       <WaveBackground backgroundColor="#fafafa" strokeColor="#e5e5e5" />
       {showPopup && <MockDataPopup onClose={() => setShowPopup(false)} />}
 
@@ -129,7 +129,7 @@ function DashboardShell() {
       />
 
       {/* Content */}
-      <main className="relative z-10 flex-1 flex flex-col min-h-0 pt-14">
+      <main className="relative z-10 flex-1 flex flex-col pt-14">
         {profileError && (
           <div className="px-6 pt-4">
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
