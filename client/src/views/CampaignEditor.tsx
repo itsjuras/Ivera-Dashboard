@@ -2,8 +2,8 @@ import React from 'react'
 import { Plus } from 'lucide-react'
 import {
   statusColors,
-  type CampaignConfig,
   type CampaignDefinition,
+  type CampaignConfig,
 } from './salesUtils'
 import { healthTone, replyRate, type CampaignAnalytics } from './salesAnalytics'
 
@@ -84,6 +84,16 @@ export default function CampaignEditor({
   onSetDefault,
   onCreateCampaign,
 }: CampaignEditorProps) {
+  function campaignDisplayStatus(campaign: CampaignDefinition, analytics: CampaignAnalytics | null) {
+    if (campaign.status === 'paused' && (analytics?.totalRuns ?? campaign.total_runs ?? 0) === 0) {
+      return { label: 'ready', className: 'bg-blue-100 text-blue-700' }
+    }
+    return {
+      label: campaign.status,
+      className: statusColors[campaign.status] ?? statusColors.paused,
+    }
+  }
+
   const toggleScheduleDay = (
     current: string[] | undefined,
     day: string,
@@ -137,6 +147,7 @@ export default function CampaignEditor({
                 {campaignDefinitions.map((campaign) => (
                   (() => {
                     const analytics = campaignAnalyticsByDefinition?.get(campaign.id) ?? null
+                    const displayStatus = campaignDisplayStatus(campaign, analytics)
                     return (
                       <div
                         key={campaign.id}
@@ -184,8 +195,8 @@ export default function CampaignEditor({
                                 Health {analytics.healthScore}/100
                               </span>
                             ) : null}
-                            <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${statusColors[campaign.status] ?? statusColors.paused}`}>
-                              {campaign.status}
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${displayStatus.className}`}>
+                              {displayStatus.label}
                             </span>
                           </div>
                         </div>

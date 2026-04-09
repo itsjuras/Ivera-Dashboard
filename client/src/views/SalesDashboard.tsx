@@ -1214,6 +1214,8 @@ export default function SalesDashboard() {
   const [activeTab, setActiveTab] = useState<TabKey>('outreach')
   const [guidedOpsExpanded, setGuidedOpsExpanded] = useState(true)
   const [overviewDays, setOverviewDays] = useState<OverviewDays>(0)
+  const [graphCampaignFilterOpen, setGraphCampaignFilterOpen] = useState(false)
+  const [graphCampaignIds, setGraphCampaignIds] = useState<string[]>([])
   const [prospectDays, setProspectDays] = useState<ProspectDays>(30)
   const [prospectStatus, setProspectStatus] = useState<ProspectStatus>('all')
   const [prospectScore, setProspectScore] = useState<ProspectScore>('all')
@@ -1530,6 +1532,26 @@ export default function SalesDashboard() {
     ),
     [campaigns, selectedCampaignDefinition],
   )
+  const selectableGraphCampaigns = useMemo(
+    () => campaignDefinitions.filter((campaign) => campaign.status !== 'archived'),
+    [campaignDefinitions],
+  )
+  const graphScopedRuns = useMemo(() => {
+    if (!selectedCampaignDefinition) return []
+    const activeIds = graphCampaignIds.length ? graphCampaignIds : [selectedCampaignDefinition.id]
+    return campaigns
+      .filter((campaign) => activeIds.includes(campaign.campaign_definition_id || ''))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [campaigns, graphCampaignIds, selectedCampaignDefinition])
+  const graphCampaignLabel = useMemo(() => {
+    if (!selectedCampaignDefinition) return 'Workspace'
+    if (!selectableGraphCampaigns.length) return selectedCampaignDefinition.name
+    if (graphCampaignIds.length >= selectableGraphCampaigns.length) return 'All active campaigns'
+    if (graphCampaignIds.length <= 1) {
+      return selectableGraphCampaigns.find((campaign) => campaign.id === (graphCampaignIds[0] || selectedCampaignDefinition.id))?.name || selectedCampaignDefinition.name
+    }
+    return `${graphCampaignIds.length} campaigns`
+  }, [graphCampaignIds, selectableGraphCampaigns, selectedCampaignDefinition])
   const selectedCampaignFollowUpPerformance = useMemo(() => {
     if (!selectedCampaignId) return followUpPerformance
     return followUpPerformanceByCampaign.find((entry) => entry.campaign_definition_id === selectedCampaignId)?.branches ?? []
@@ -1538,6 +1560,7 @@ export default function SalesDashboard() {
   useEffect(() => {
     if (!campaignDefinitions.length) {
       setSelectedCampaignId(null)
+      setGraphCampaignIds([])
       setEditingCampaign(null)
       setCampaignAssessment(null)
       setReassessInput('')
@@ -1555,6 +1578,23 @@ export default function SalesDashboard() {
       return preferred.id
     })
   }, [campaignDefinitions])
+
+  useEffect(() => {
+    const availableIds = selectableGraphCampaigns.map((campaign) => campaign.id)
+    if (!availableIds.length) {
+      setGraphCampaignIds([])
+      return
+    }
+
+    setGraphCampaignIds((current) => {
+      const filtered = current.filter((id) => availableIds.includes(id))
+      if (selectedCampaignId && availableIds.includes(selectedCampaignId)) {
+        if (filtered.includes(selectedCampaignId)) return filtered
+        return [selectedCampaignId, ...filtered]
+      }
+      return filtered.length ? filtered : [availableIds[0]]
+    })
+  }, [selectableGraphCampaigns, selectedCampaignId])
 
   useEffect(() => {
     if (!selectedCampaignDefinition) {
@@ -1649,12 +1689,12 @@ export default function SalesDashboard() {
   const leadActivity = useMemo(
     () => (
       selectedCampaignDefinition
-        ? buildLeadActivityFromCampaignRuns(selectedCampaignScopedRuns, overviewDays)
+        ? buildLeadActivityFromCampaignRuns(graphScopedRuns, overviewDays)
         : leadActivitySeries.length > 0
         ? buildLeadActivityFromSeries(leadActivitySeries, overviewDays)
         : buildLeadActivity(overviewLeads, overviewDays)
     ),
-    [leadActivitySeries, overviewLeads, overviewDays, selectedCampaignDefinition, selectedCampaignScopedRuns],
+    [graphScopedRuns, leadActivitySeries, overviewLeads, overviewDays, selectedCampaignDefinition],
   )
 
   const parsedManualOverride = Number(manualLeadOverride)
@@ -2728,10 +2768,63 @@ export default function SalesDashboard() {
                 <h3 className="text-sm font-semibold text-neutral-900">Lead Activity</h3>
                 <p className="mt-1 text-xs text-neutral-500">
                   Live lead activity with time and layer filters. Showing {leadActivity.length}{' '}
-                  {leadActivity.length === 1 ? 'day' : 'days'} in {overviewWindowLabel.toLowerCase()}.
+                  {leadActivity.length === 1 ? 'day' : 'days'} in {overviewWindowLabel.toLowerCase()}
+                  {selectedCampaignDefinition ? ` for ${graphCampaignLabel.toLowerCase()}.` : '.'}
                 </p>
               </div>
               <div className="flex flex-col gap-3 lg:items-end">
+                {selectedCampaignDefinition ? (
+                  <div className="relative flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setGraphCampaignFilterOpen((current) => !current)}
+                      className={tabButtonClass(graphCampaignFilterOpen)}
+                    >
+                      {graphCampaignLabel}
+                    </button>
+                    {graphCampaignFilterOpen ? (
+                      <div className="absolute right-0 top-10 z-20 w-72 rounded-xl border border-neutral-200 bg-white p-3 shadow-lg">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[11px] tracking-widest uppercase text-neutral-400">Graph Campaigns</p>
+                          <button
+                            type="button"
+                            onClick={() => setGraphCampaignIds(selectableGraphCampaigns.map((campaign) => campaign.id))}
+                            className="text-[11px] tracking-widest uppercase text-neutral-500 hover:text-neutral-900"
+                          >
+                            All
+                          </button>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {selectableGraphCampaigns.map((campaign) => {
+                            const checked = graphCampaignIds.includes(campaign.id)
+                            return (
+                              <label key={campaign.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-neutral-100 px-3 py-2 text-sm">
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-neutral-900">{campaign.name}</p>
+                                  <p className="mt-1 text-xs text-neutral-500">{campaign.product_name}</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    setGraphCampaignIds((current) => {
+                                      if (current.includes(campaign.id)) {
+                                        const next = current.filter((id) => id !== campaign.id)
+                                        return next.length ? next : [campaign.id]
+                                      }
+                                      return [...current, campaign.id]
+                                    })
+                                  }}
+                                  className="h-4 w-4 rounded border-neutral-300 text-neutral-900"
+                                />
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   {[7, 14, 30].map((days) => (
                     <button
