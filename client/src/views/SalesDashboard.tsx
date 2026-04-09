@@ -932,6 +932,56 @@ function summarizeLeadActivitySeries(series: NonNullable<PortalStats['leadActivi
   )
 }
 
+function buildLeadActivityFromCampaignRuns(runs: PortalStats['campaigns'], days: number) {
+  const filteredRuns = days > 0
+    ? runs.filter((run) => leadWithinDays(run.created_at, days))
+    : runs
+
+  const byDay = new Map<string, { day: string; sent: number; replied: number; booked: number; unsubscribed: number }>()
+  for (const run of filteredRuns) {
+    const dateKey = dateKeyInTimeZone(run.created_at)
+    if (!dateKey) continue
+    const bucket = byDay.get(dateKey) || { day: formatDateKeyLabel(dateKey), sent: 0, replied: 0, booked: 0, unsubscribed: 0 }
+    bucket.sent += run.emailed || 0
+    bucket.replied += run.replied || 0
+    bucket.booked += run.booked || 0
+    bucket.unsubscribed += run.unsubscribed || 0
+    byDay.set(dateKey, bucket)
+  }
+
+  return Array.from(byDay.entries())
+    .sort((a, b) => dateFromKey(a[0]).getTime() - dateFromKey(b[0]).getTime())
+    .map(([, value]) => value)
+}
+
+function summarizeCampaignRuns(runs: PortalStats['campaigns'], days: number) {
+  const filteredRuns = days > 0
+    ? runs.filter((run) => leadWithinDays(run.created_at, days))
+    : runs
+
+  return filteredRuns.reduce(
+    (acc, run) => {
+      acc.sent += run.emailed || 0
+      acc.replied += run.replied || 0
+      acc.booked += run.booked || 0
+      acc.unsubscribed += run.unsubscribed || 0
+      if (typeof run.avg_score === 'number') {
+        acc.scoreTotal += run.avg_score
+        acc.scoreCount += 1
+      }
+      return acc
+    },
+    {
+      sent: 0,
+      replied: 0,
+      booked: 0,
+      unsubscribed: 0,
+      scoreTotal: 0,
+      scoreCount: 0,
+    },
+  )
+}
+
 function MetricSection({
   title,
   icon: Icon,
@@ -1470,6 +1520,16 @@ export default function SalesDashboard() {
     () => (selectedCampaignId ? campaignAnalyticsByDefinition.get(selectedCampaignId) ?? null : null),
     [campaignAnalyticsByDefinition, selectedCampaignId],
   )
+  const selectedCampaignScopedRuns = useMemo(
+    () => (
+      selectedCampaignDefinition
+        ? campaigns
+            .filter((campaign) => campaign.campaign_definition_id === selectedCampaignDefinition.id)
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        : []
+    ),
+    [campaigns, selectedCampaignDefinition],
+  )
   const selectedCampaignFollowUpPerformance = useMemo(() => {
     if (!selectedCampaignId) return followUpPerformance
     return followUpPerformanceByCampaign.find((entry) => entry.campaign_definition_id === selectedCampaignId)?.branches ?? []
@@ -1541,6 +1601,21 @@ export default function SalesDashboard() {
   }, [recentLeads, prospectDays, prospectScore, prospectStatus])
 
   const overviewSummary = useMemo(() => {
+    if (selectedCampaignDefinition) {
+      const runTotals = summarizeCampaignRuns(selectedCampaignScopedRuns, overviewDays)
+      return {
+        sent: runTotals.sent,
+        replied: runTotals.replied,
+        booked: runTotals.booked,
+        unsubscribed: runTotals.unsubscribed,
+        scored: runTotals.scoreCount,
+        pipeline: selectedCampaignScopedRuns.length,
+        avgScore: runTotals.scoreCount > 0 ? Number((runTotals.scoreTotal / runTotals.scoreCount).toFixed(1)) : '—',
+        highIntent: selectedCampaignScopedRuns.filter((run) => (run.avg_score ?? 0) >= 7).length,
+        recentReplies: selectedCampaignScopedRuns.filter((run) => (run.replied || 0) > 0).length,
+      }
+    }
+
     const activityTotals = leadActivitySeries.length > 0
       ? summarizeLeadActivitySeries(leadActivitySeries, overviewDays)
       : null
@@ -1569,15 +1644,17 @@ export default function SalesDashboard() {
       highIntent: highIntentCount(overviewLeads),
       recentReplies: recentReplyCount(overviewLeads),
     }
-  }, [leadActivitySeries, overviewDays, overviewLeads])
+  }, [leadActivitySeries, overviewDays, overviewLeads, selectedCampaignDefinition, selectedCampaignScopedRuns])
 
   const leadActivity = useMemo(
     () => (
-      leadActivitySeries.length > 0
+      selectedCampaignDefinition
+        ? buildLeadActivityFromCampaignRuns(selectedCampaignScopedRuns, overviewDays)
+        : leadActivitySeries.length > 0
         ? buildLeadActivityFromSeries(leadActivitySeries, overviewDays)
         : buildLeadActivity(overviewLeads, overviewDays)
     ),
-    [leadActivitySeries, overviewLeads, overviewDays],
+    [leadActivitySeries, overviewLeads, overviewDays, selectedCampaignDefinition, selectedCampaignScopedRuns],
   )
 
   const parsedManualOverride = Number(manualLeadOverride)
@@ -1663,7 +1740,9 @@ export default function SalesDashboard() {
     () => campaigns.find((campaign) => campaign.id === selectedRunId) ?? null,
     [campaigns, selectedRunId],
   )
-  const latestRunDiagnostics = campaigns[0]?.funnel_diagnostics
+  const latestRunDiagnostics = selectedCampaignDefinition
+    ? selectedCampaignScopedRuns[0]?.funnel_diagnostics
+    : campaigns[0]?.funnel_diagnostics
   const latestRunInsights = useMemo(
     () => buildRunInsights(latestRunDiagnostics),
     [latestRunDiagnostics],
@@ -1850,9 +1929,9 @@ export default function SalesDashboard() {
 
   const outreachMetrics = [
     { label: 'Sent In Window', value: overviewSummary.sent, hint: overviewWindowLabel },
-    { label: 'Sent This Week', value: totals.weekEmailed, hint: 'Rolling 7 days' },
-    { label: 'Campaign Runs', value: totalCampaignRuns, hint: 'Recorded runs' },
-    { label: 'Latest Run', value: latestRunLabel(campaigns), hint: 'Most recent activity' },
+    { label: 'Sent This Week', value: selectedCampaignDefinition ? summarizeCampaignRuns(selectedCampaignScopedRuns, 7).sent : totals.weekEmailed, hint: 'Rolling 7 days' },
+    { label: 'Campaign Runs', value: selectedCampaignDefinition ? selectedCampaignScopedRuns.length : totalCampaignRuns, hint: selectedCampaignDefinition ? 'Selected campaign runs' : 'Recorded runs' },
+    { label: 'Latest Run', value: selectedCampaignDefinition ? latestRunLabel(selectedCampaignScopedRuns) : latestRunLabel(campaigns), hint: 'Most recent activity' },
     { label: 'Next Run', value: formatScheduledRun(nextScheduledRun), hint: 'Tue–Thu at 17:00 UTC' },
   ]
   const engagementMetrics = [
