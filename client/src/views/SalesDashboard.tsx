@@ -1603,25 +1603,31 @@ export default function SalesDashboard() {
       return
     }
 
-    setEditingCampaign({
-      id: selectedCampaignDefinition.id,
-      name: selectedCampaignDefinition.name,
-      product_name: selectedCampaignDefinition.product_name,
-      product_context: selectedCampaignDefinition.product_context,
-      target_description: selectedCampaignDefinition.target_description,
-      num_leads_per_run: selectedCampaignDefinition.num_leads_per_run,
-      schedule_days: selectedCampaignDefinition.schedule_days ?? ['tue', 'wed', 'thu'],
-      schedule_time_local: selectedCampaignDefinition.schedule_time_local ?? '08:00',
-      schedule_timezone: selectedCampaignDefinition.schedule_timezone ?? 'America/Vancouver',
-      sender_name: selectedCampaignDefinition.sender_name ?? null,
-      sender_email: selectedCampaignDefinition.sender_email ?? null,
-      reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
-      cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
+    setEditingCampaign((current) => {
+      if (current?.id === selectedCampaignDefinition.id) {
+        return current
+      }
+
+      return {
+        id: selectedCampaignDefinition.id,
+        name: selectedCampaignDefinition.name,
+        product_name: selectedCampaignDefinition.product_name,
+        product_context: selectedCampaignDefinition.product_context,
+        target_description: selectedCampaignDefinition.target_description,
+        num_leads_per_run: selectedCampaignDefinition.num_leads_per_run,
+        schedule_days: selectedCampaignDefinition.schedule_days ?? ['tue', 'wed', 'thu'],
+        schedule_time_local: selectedCampaignDefinition.schedule_time_local ?? '08:00',
+        schedule_timezone: selectedCampaignDefinition.schedule_timezone ?? 'America/Vancouver',
+        sender_name: selectedCampaignDefinition.sender_name ?? null,
+        sender_email: selectedCampaignDefinition.sender_email ?? null,
+        reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
+        cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
+      }
     })
     setCampaignAssessment(null)
     setAssessmentApplied(false)
     setReassessModalOpen(false)
-  }, [selectedCampaignDefinition])
+  }, [selectedCampaignDefinition?.id])
 
   const overviewLeads = useMemo(
     () => recentLeads.filter((lead) => leadWithinDays(lead.created_at, overviewDays)),
