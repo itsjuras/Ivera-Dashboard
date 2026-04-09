@@ -610,17 +610,57 @@ function formatElapsedTimer(startedAt: number, now = Date.now()) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-function getNextScheduledCampaignRun(now = new Date()) {
-  const targetDays = new Set([2, 3, 4]) // Tue-Thu in UTC
+function formatPartsInTimeZone(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
 
-  for (let offset = 0; offset < 14; offset += 1) {
-    const candidate = new Date(now)
-    candidate.setUTCDate(now.getUTCDate() + offset)
-    candidate.setUTCHours(17, 0, 0, 0)
+  return Object.fromEntries(
+    formatter.formatToParts(date)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+}
 
-    if (!targetDays.has(candidate.getUTCDay())) continue
-    if (candidate.getTime() <= now.getTime()) continue
+function getNextScheduledCampaignRun(definition: CampaignDefinition | null, now = new Date()) {
+  if (!definition) return null
 
+  const timeZone = definition.schedule_timezone || 'America/Vancouver'
+  const scheduleDays = Array.isArray(definition.schedule_days) && definition.schedule_days.length
+    ? definition.schedule_days
+    : ['tue', 'wed', 'thu']
+  const scheduledTime = String(definition.schedule_time_local || '08:00')
+  const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map((value) => Number(value))
+
+  if (!Number.isFinite(scheduledHour) || !Number.isFinite(scheduledMinute)) return null
+
+  const weekdayMap: Record<string, string> = {
+    Sun: 'sun',
+    Mon: 'mon',
+    Tue: 'tue',
+    Wed: 'wed',
+    Thu: 'thu',
+    Fri: 'fri',
+    Sat: 'sat',
+  }
+
+  const start = now.getTime() + 60_000
+  const end = start + (14 * 24 * 60 * 60 * 1000)
+
+  for (let timestamp = start; timestamp <= end; timestamp += 60_000) {
+    const candidate = new Date(timestamp)
+    const parts = formatPartsInTimeZone(candidate, timeZone)
+    const localDay = weekdayMap[String(parts.weekday)] || null
+    if (!localDay || !scheduleDays.includes(localDay)) continue
+    if (Number(parts.hour) !== scheduledHour) continue
+    if (Number(parts.minute) !== scheduledMinute) continue
     return candidate
   }
 
@@ -630,6 +670,18 @@ function getNextScheduledCampaignRun(now = new Date()) {
 function formatScheduledRun(date: Date | null) {
   if (!date) return 'Unavailable'
   return new Intl.DateTimeFormat('en-CA', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatScheduledRunInTimeZone(date: Date | null, timeZone: string | null | undefined) {
+  if (!date) return 'Unavailable'
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timeZone || undefined,
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -1889,7 +1941,16 @@ export default function SalesDashboard() {
     [recentLeads],
   )
 
-  const nextScheduledRun = useMemo(() => getNextScheduledCampaignRun(), [])
+  const nextScheduledRun = useMemo(
+    () => getNextScheduledCampaignRun(selectedCampaignDefinition),
+    [selectedCampaignDefinition],
+  )
+  const nextScheduledRunValue = selectedCampaignDefinition
+    ? formatScheduledRunInTimeZone(nextScheduledRun, selectedCampaignDefinition.schedule_timezone)
+    : formatScheduledRun(nextScheduledRun)
+  const nextScheduledRunHint = selectedCampaignDefinition
+    ? `${selectedCampaignDefinition.schedule_timezone || 'America/Vancouver'} · your time ${formatScheduledRun(nextScheduledRun)}`
+    : 'Based on selected campaign schedule'
 
   useEffect(() => {
     if (!liveCampaignProgress || !session?.access_token) return
@@ -1978,7 +2039,7 @@ export default function SalesDashboard() {
     { label: 'Sent This Week', value: selectedCampaignDefinition ? summarizeCampaignRuns(selectedCampaignScopedRuns, 7).sent : totals.weekEmailed, hint: 'Rolling 7 days' },
     { label: 'Campaign Runs', value: selectedCampaignDefinition ? selectedCampaignScopedRuns.length : totalCampaignRuns, hint: selectedCampaignDefinition ? 'Selected campaign runs' : 'Recorded runs' },
     { label: 'Latest Run', value: selectedCampaignDefinition ? latestRunLabel(selectedCampaignScopedRuns) : latestRunLabel(campaigns), hint: 'Most recent activity' },
-    { label: 'Next Run', value: formatScheduledRun(nextScheduledRun), hint: 'Tue–Thu at 17:00 UTC' },
+    { label: 'Next Run', value: nextScheduledRunValue, hint: nextScheduledRunHint },
   ]
   const engagementMetrics = [
     { label: 'Replies', value: overviewSummary.replied, hint: overviewWindowLabel },
