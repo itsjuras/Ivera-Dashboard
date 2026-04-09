@@ -73,9 +73,15 @@ export default function WaveBackground({
         parent?.offsetHeight || 0,
       )
       boundingRef.current = {
-        ...rect,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
         height: measuredHeight,
+        top: rect.top,
+        right: rect.left + rect.width,
         bottom: rect.top + measuredHeight,
+        left: rect.left,
+        toJSON: () => ({}),
       } as DOMRect
       pageOffsetY.current = boundingRef.current.top + window.scrollY
       const { width, height } = boundingRef.current
