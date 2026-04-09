@@ -46,6 +46,8 @@ export default function WaveBackground({
 
   useEffect(() => {
     if (!containerRef.current || !svgRef.current) return
+    const container = containerRef.current
+    const parent = container.parentElement
 
     // Only animate when visible on screen
     const observer = new IntersectionObserver(
@@ -57,11 +59,24 @@ export default function WaveBackground({
       },
       { threshold: 0 }
     )
-    observer.observe(containerRef.current)
+    observer.observe(container)
 
     const setSize = () => {
       if (!containerRef.current || !svgRef.current) return
-      boundingRef.current = containerRef.current.getBoundingClientRect()
+      const rect = containerRef.current.getBoundingClientRect()
+      const measuredHeight = Math.max(
+        rect.height,
+        containerRef.current.scrollHeight,
+        containerRef.current.offsetHeight,
+        parent?.scrollHeight || 0,
+        parent?.clientHeight || 0,
+        parent?.offsetHeight || 0,
+      )
+      boundingRef.current = {
+        ...rect,
+        height: measuredHeight,
+        bottom: rect.top + measuredHeight,
+      } as DOMRect
       pageOffsetY.current = boundingRef.current.top + window.scrollY
       const { width, height } = boundingRef.current
       svgRef.current.style.width = `${width}px`
@@ -109,6 +124,10 @@ export default function WaveBackground({
       setSize()
       setLines()
     }
+
+    const resizeObserver = new ResizeObserver(() => {
+      onResize()
+    })
 
     const updateMousePosition = (clientX: number, clientY: number) => {
       if (!boundingRef.current) return
@@ -221,9 +240,10 @@ export default function WaveBackground({
     setLines()
     rafRef.current = requestAnimationFrame(tick)
 
+    resizeObserver.observe(container)
+    if (parent) resizeObserver.observe(parent)
     window.addEventListener('resize', onResize)
     window.addEventListener('mousemove', onMouseMove)
-    const container = containerRef.current
     container.addEventListener('touchmove', onTouchMove, { passive: false })
 
     return () => {
@@ -232,6 +252,7 @@ export default function WaveBackground({
       window.removeEventListener('resize', onResize)
       window.removeEventListener('mousemove', onMouseMove)
       container?.removeEventListener('touchmove', onTouchMove)
+      resizeObserver.disconnect()
       observer.disconnect()
     }
   }, [strokeColor])
