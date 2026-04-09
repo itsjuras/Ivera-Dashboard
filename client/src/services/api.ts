@@ -2,9 +2,27 @@ import supabase from './supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 
+let cachedAccessToken: string | null | undefined
+let inflightTokenPromise: Promise<string | null> | null = null
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedAccessToken = session?.access_token ?? null
+})
+
 async function getToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
+  if (cachedAccessToken !== undefined) return cachedAccessToken
+  if (inflightTokenPromise) return inflightTokenPromise
+
+  inflightTokenPromise = supabase.auth.getSession()
+    .then(({ data }) => {
+      cachedAccessToken = data.session?.access_token ?? null
+      return cachedAccessToken
+    })
+    .finally(() => {
+      inflightTokenPromise = null
+    })
+
+  return inflightTokenPromise
 }
 
 async function authGet<T>(path: string): Promise<T> {
