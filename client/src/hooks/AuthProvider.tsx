@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -15,6 +16,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role | null>(null)
   const [products, setProducts] = useState<UserProduct[]>([])
   const [profileError, setProfileError] = useState<string | null>(null)
+  const lastRevalidatedAtRef = useRef(0)
+  const revalidatingRef = useRef(false)
 
   async function loadProfile() {
     try {
@@ -29,19 +32,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshSession() {
-    const { data, error } = await supabase.auth.refreshSession()
-    if (error) return
+    if (revalidatingRef.current) return
+    revalidatingRef.current = true
+    try {
+      const { data, error } = await supabase.auth.refreshSession()
+      if (error) return
 
-    const nextSession = data.session ?? null
-    setSession(nextSession)
-    setUser(nextSession?.user ?? null)
+      const nextSession = data.session ?? null
+      const currentAccessToken = session?.access_token ?? null
+      const nextAccessToken = nextSession?.access_token ?? null
+      const currentUserId = user?.id ?? null
+      const nextUserId = nextSession?.user?.id ?? null
 
-    if (nextSession) {
-      await loadProfile()
-    } else {
-      setRole(null)
-      setProducts([])
-      setProfileError(null)
+      if (currentAccessToken !== nextAccessToken || currentUserId !== nextUserId) {
+        setSession(nextSession)
+        setUser(nextSession?.user ?? null)
+      }
+
+      if (nextSession) {
+        await loadProfile()
+      } else {
+        setRole(null)
+        setProducts([])
+        setProfileError(null)
+      }
+      lastRevalidatedAtRef.current = Date.now()
+    } finally {
+      revalidatingRef.current = false
     }
   }
 
@@ -72,6 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function revalidateAuthState() {
       if (document.visibilityState === 'hidden') return
+      if (!session) return
+      if (Date.now() - lastRevalidatedAtRef.current < 60_000) return
       await refreshSession()
     }
 
@@ -96,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [])
+  }, [session, user])
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })

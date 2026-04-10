@@ -91,7 +91,12 @@ export default function SupportDashboard() {
 
   const load = useCallback(async () => {
     if (!session) return
-    setLoading(true)
+    setLoading((current) => (
+      current
+      && !stats
+      && tickets.length === 0
+      && kbArticles.length === 0
+    ))
     setError(null)
     try {
       const [statsRes, ticketsRes, kbRes] = await Promise.all([
@@ -114,7 +119,7 @@ export default function SupportDashboard() {
     } finally {
       setLoading(false)
     }
-  }, [session, authHeaders])
+  }, [authHeaders, kbArticles.length, session, stats, tickets.length])
 
   useEffect(() => { load() }, [load])
 

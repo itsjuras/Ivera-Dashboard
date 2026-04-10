@@ -1377,7 +1377,6 @@ export default function SalesDashboard() {
 
     let cancelled = false
     setError(null)
-    setStats(null)
 
     fetch(`${SALES_API}/portal/stats?timezone=${encodeURIComponent(BROWSER_TIME_ZONE)}`, {
       cache: 'no-store',
@@ -1403,7 +1402,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [session?.access_token])
 
   useEffect(() => {
     if (!session?.access_token || role !== 'ivera_admin') {
@@ -1414,7 +1413,7 @@ export default function SalesDashboard() {
     }
 
     let cancelled = false
-    setCampaignsLoading(true)
+    if (!campaignDefinitions.length) setCampaignsLoading(true)
 
     salesRequest<{ campaigns: CampaignDefinition[] }>(session.access_token, '/campaigns')
       .then((data) => {
@@ -1431,7 +1430,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [role, session])
+  }, [campaignDefinitions.length, role, session?.access_token])
 
   useEffect(() => {
     if (!session?.access_token) {
@@ -1444,7 +1443,7 @@ export default function SalesDashboard() {
     }
 
     let cancelled = false
-    setCrmLoading(true)
+    if (!crmAccounts.length) setCrmLoading(true)
     setCrmError(null)
 
     salesRequest<{ accounts: CrmAccountSummary[] }>(session.access_token, '/accounts')
@@ -1462,7 +1461,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [crmAccounts.length, session?.access_token])
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1480,7 +1479,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [session?.access_token])
 
   useEffect(() => {
     if (!session?.access_token) return
@@ -1498,7 +1497,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [session])
+  }, [session?.access_token])
 
   useEffect(() => {
     if (!crmAccounts.length) {
@@ -1533,7 +1532,7 @@ export default function SalesDashboard() {
     return () => {
       cancelled = true
     }
-  }, [selectedAccountId, session])
+  }, [selectedAccountId, session?.access_token])
 
   const totals = stats?.totals ?? { emailed: 0, replied: 0, booked: 0, unsubscribed: 0, weekEmailed: 0 }
   const crm = stats?.crm ?? {
