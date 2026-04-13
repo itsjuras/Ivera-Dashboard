@@ -458,8 +458,8 @@ export default function Landing() {
               Five products.<br />One agency.
             </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-            {products.map(({ icon: Icon, title, description, cta, href, external }) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {products.filter(p => !p.external).map(({ icon: Icon, title, description, cta, href }) => (
               <div
                 key={title}
                 className="bg-white/70 border border-neutral-200/60 rounded-2xl p-8 hover:border-neutral-300 transition-colors flex flex-col gap-5"
@@ -473,7 +473,6 @@ export default function Landing() {
                 </div>
                 <a
                   href={href}
-                  {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="mt-auto text-xs font-medium tracking-widest text-neutral-900 hover:text-neutral-500 transition-colors uppercase"
                 >
                   {cta} →
@@ -481,6 +480,28 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          {products.filter(p => p.external).map(({ icon: Icon, title, description, cta, href }) => (
+            <div
+              key={title}
+              className="mt-6 bg-white/70 border border-neutral-200/60 rounded-2xl p-8 hover:border-neutral-300 transition-colors flex flex-col sm:flex-row sm:items-center gap-6"
+            >
+              <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0">
+                <Icon size={22} className="text-neutral-600" strokeWidth={1.5} />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-black mb-2 tracking-wider uppercase">{title}</h4>
+                <p className="text-xs text-neutral-600 leading-relaxed tracking-wider uppercase max-w-2xl">{description}</p>
+              </div>
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-xs font-medium tracking-widest text-neutral-900 hover:text-neutral-500 transition-colors uppercase"
+              >
+                {cta} →
+              </a>
+            </div>
+          ))}
         </div>
       </section>
 
