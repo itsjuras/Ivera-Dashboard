@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Phone, Mail, BarChart3, MessageSquare, ChevronDown, Check } from 'lucide-react'
+import { Phone, Mail, BarChart3, MessageSquare, ChevronDown, Check, Video } from 'lucide-react'
 import WaveBackground from '../components/WaveBackground'
 import { useAuth } from '../hooks/useAuth'
 
@@ -45,6 +45,17 @@ const products = [
       'Handles every customer support email and chat automatically. Searches your knowledge base, drafts a reply instantly, and only escalates to a human when it truly needs to — so your team focuses on what matters.',
     cta: 'Learn more',
     href: '#support',
+  },
+  {
+    tag: 'Live now',
+    tagColor: 'bg-emerald-100 text-emerald-700',
+    icon: Video,
+    title: 'Ivera Stream',
+    description:
+      'Live and on-demand video streaming for your business. Host webinars, product demos, client onboarding sessions, and training — all on your own branded channel.',
+    cta: 'Go to Ivera Stream',
+    href: 'https://streaming.ivera.ca',
+    external: true,
   },
 ]
 
@@ -444,11 +455,11 @@ export default function Landing() {
           <div className="mb-16">
             <p className="text-xs tracking-widest text-neutral-500 mb-3 uppercase">Products</p>
             <h3 className="text-2xl sm:text-3xl font-semibold text-black tracking-wide uppercase">
-              Four agents.<br />One agency.
+              Five products.<br />One agency.
             </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.map(({ icon: Icon, title, description, cta, href }) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {products.map(({ icon: Icon, title, description, cta, href, external }) => (
               <div
                 key={title}
                 className="bg-white/70 border border-neutral-200/60 rounded-2xl p-8 hover:border-neutral-300 transition-colors flex flex-col gap-5"
@@ -462,6 +473,7 @@ export default function Landing() {
                 </div>
                 <a
                   href={href}
+                  {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="mt-auto text-xs font-medium tracking-widest text-neutral-900 hover:text-neutral-500 transition-colors uppercase"
                 >
                   {cta} →
