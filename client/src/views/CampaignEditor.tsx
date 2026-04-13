@@ -131,6 +131,10 @@ export default function CampaignEditor({
                     schedule_days: editingCampaign?.schedule_days || selectedCampaignDefinition?.schedule_days || ['tue', 'wed', 'thu'],
                     schedule_time_local: editingCampaign?.schedule_time_local || selectedCampaignDefinition?.schedule_time_local || '08:00',
                     schedule_timezone: editingCampaign?.schedule_timezone || selectedCampaignDefinition?.schedule_timezone || 'America/Vancouver',
+                    sender_name: editingCampaign?.sender_name || selectedCampaignDefinition?.sender_name || null,
+                    sender_email: editingCampaign?.sender_email || selectedCampaignDefinition?.sender_email || null,
+                    reply_to_email: editingCampaign?.reply_to_email || selectedCampaignDefinition?.reply_to_email || null,
+                    cal_booking_url: editingCampaign?.cal_booking_url || selectedCampaignDefinition?.cal_booking_url || null,
                   })
                 }}
                 className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800"
@@ -318,6 +322,52 @@ export default function CampaignEditor({
                     className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
                   />
                 </label>
+                <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4">
+                  <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sender Settings</p>
+                  <p className="mt-1 text-xs text-neutral-500">Leave blank to use client-level defaults.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Sender Name</span>
+                      <input
+                        type="text"
+                        value={newCampaignDraft.sender_name ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, sender_name: event.target.value || null }))}
+                        placeholder="e.g. Alex from Ivera"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Sender Email</span>
+                      <input
+                        type="email"
+                        value={newCampaignDraft.sender_email ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, sender_email: event.target.value || null }))}
+                        placeholder="e.g. alex@ivera.ca"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Reply-To Email</span>
+                      <input
+                        type="email"
+                        value={newCampaignDraft.reply_to_email ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, reply_to_email: event.target.value || null }))}
+                        placeholder="Defaults to sender email"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Booking URL</span>
+                      <input
+                        type="url"
+                        value={newCampaignDraft.cal_booking_url ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, cal_booking_url: event.target.value || null }))}
+                        placeholder="e.g. https://cal.com/yourname"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                  </div>
+                </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
