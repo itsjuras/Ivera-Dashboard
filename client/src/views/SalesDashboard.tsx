@@ -1150,6 +1150,14 @@ function tabButtonClass(active: boolean) {
   }`
 }
 
+function secondaryTabButtonClass(active: boolean) {
+  return `rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-[0.16em] uppercase transition ${
+    active
+      ? 'border-neutral-700 bg-neutral-700 text-white'
+      : 'border-neutral-200 bg-white/60 text-neutral-500 hover:border-neutral-300 hover:text-neutral-700'
+  }`
+}
+
 function timelineTypeLabel(type: string) {
   const labels: Record<string, string> = {
     outbound_email: 'Outbound Email',
@@ -1263,6 +1271,63 @@ async function salesRequest<T>(token: string, path: string, options: RequestInit
   }
 
   return res.json()
+}
+
+function normalizeContactEmail(raw: string | null | undefined): { value: string | null; error: string | null } {
+  const value = (raw || '').trim().toLowerCase()
+  if (!value) return { value: null, error: null }
+  const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+  if (!isValid) return { value: null, error: 'Contact email must be a valid email address.' }
+  return { value, error: null }
+}
+
+function normalizeContactPhone(raw: string | null | undefined): { value: string | null; error: string | null } {
+  const source = (raw || '').trim()
+  if (!source) return { value: null, error: null }
+
+  const digits = source.replace(/\D/g, '')
+  if (!digits) return { value: null, error: null }
+
+  // Normalize to an E.164-like format for consistency in storage and dialing.
+  let nationalized = digits
+  if (!source.startsWith('+') && digits.length === 10) {
+    nationalized = `1${digits}`
+  }
+
+  if (nationalized.length < 10 || nationalized.length > 15) {
+    return { value: null, error: 'Contact phone must have between 10 and 15 digits.' }
+  }
+
+  return { value: `+${nationalized}`, error: null }
+}
+
+function buildValidatedCampaignPayload(campaign: CampaignConfig): { payload: Record<string, unknown> | null; error: string | null } {
+  const normalizedEmail = normalizeContactEmail(campaign.contact_email)
+  if (normalizedEmail.error) return { payload: null, error: normalizedEmail.error }
+
+  const normalizedPhone = normalizeContactPhone(campaign.contact_phone)
+  if (normalizedPhone.error) return { payload: null, error: normalizedPhone.error }
+
+  return {
+    payload: {
+      name: campaign.name,
+      product_name: campaign.product_name,
+      product_context: campaign.product_context,
+      target_description: campaign.target_description,
+      num_leads_per_run: campaign.num_leads_per_run,
+      schedule_days: campaign.schedule_days,
+      schedule_time_local: campaign.schedule_time_local,
+      schedule_timezone: campaign.schedule_timezone,
+      contact_name: campaign.contact_name ?? null,
+      contact_email: normalizedEmail.value,
+      contact_phone: normalizedPhone.value,
+      sender_name: campaign.sender_name ?? null,
+      sender_email: campaign.sender_email ?? null,
+      reply_to_email: campaign.reply_to_email ?? null,
+      cal_booking_url: campaign.cal_booking_url ?? null,
+    },
+    error: null,
+  }
 }
 
 export default function SalesDashboard() {
@@ -2258,28 +2323,18 @@ export default function SalesDashboard() {
     setAdminActionMessage(null)
 
     try {
+      const prepared = buildValidatedCampaignPayload(editingCampaign)
+      if (!prepared.payload) {
+        setAdminActionError(prepared.error || 'Invalid campaign contact fields.')
+        return
+      }
+
       const data = await salesRequest<{ campaign: CampaignDefinition; message: string }>(
         session.access_token,
         `/campaigns/${editingCampaign.id}`,
         {
         method: 'PATCH',
-          body: JSON.stringify({
-            name: editingCampaign.name,
-            product_name: editingCampaign.product_name,
-            product_context: editingCampaign.product_context,
-            target_description: editingCampaign.target_description,
-            num_leads_per_run: editingCampaign.num_leads_per_run,
-            schedule_days: editingCampaign.schedule_days,
-            schedule_time_local: editingCampaign.schedule_time_local,
-            schedule_timezone: editingCampaign.schedule_timezone,
-            contact_name: editingCampaign.contact_name ?? null,
-            contact_email: editingCampaign.contact_email ?? null,
-            contact_phone: editingCampaign.contact_phone ?? null,
-            sender_name: editingCampaign.sender_name ?? null,
-            sender_email: editingCampaign.sender_email ?? null,
-            reply_to_email: editingCampaign.reply_to_email ?? null,
-            cal_booking_url: editingCampaign.cal_booking_url ?? null,
-          }),
+          body: JSON.stringify(prepared.payload),
         },
       )
       setSelectedCampaignId(data.campaign.id)
@@ -2388,9 +2443,15 @@ export default function SalesDashboard() {
     setAdminActionMessage(null)
 
     try {
+      const prepared = buildValidatedCampaignPayload(newCampaignDraft)
+      if (!prepared.payload) {
+        setAdminActionError(prepared.error || 'Invalid campaign contact fields.')
+        return
+      }
+
       const data = await salesRequest<{ campaign: CampaignDefinition; message: string }>(session.access_token, '/campaigns', {
         method: 'POST',
-        body: JSON.stringify(newCampaignDraft),
+        body: JSON.stringify(prepared.payload),
       })
       setShowNewCampaignForm(false)
       setNewCampaignDraft({
@@ -2399,6 +2460,9 @@ export default function SalesDashboard() {
         product_context: editingCampaign?.product_context || '',
         target_description: editingCampaign?.target_description || '',
         num_leads_per_run: editingCampaign?.num_leads_per_run || 40,
+        contact_name: null,
+        contact_email: null,
+        contact_phone: null,
       })
       setSelectedCampaignId(data.campaign.id)
       setAdminActionMessage(data.message || 'Campaign created.')
@@ -2735,65 +2799,71 @@ export default function SalesDashboard() {
       ) : null}
 
       <>
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('outreach')}
-          className={tabButtonClass(activeTab === 'outreach')}
-        >
-          Outreach
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('engagement')}
-          className={tabButtonClass(activeTab === 'engagement')}
-        >
-          Engagement
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('pipeline')}
-          className={tabButtonClass(activeTab === 'pipeline')}
-        >
-          Pipeline
-        </button>
-        <button
-          type="button"
-          onClick={() => { setActiveTab('reporting'); void refreshReportingData() }}
-          className={tabButtonClass(activeTab === 'reporting')}
-        >
-          Revenue
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('leadQuality')}
-          className={tabButtonClass(activeTab === 'leadQuality')}
-        >
-          Lead Quality
-        </button>
-        <button
-          type="button"
-          onClick={() => { setActiveTab('deliverability'); void refreshDeliverabilityData() }}
-          className={tabButtonClass(activeTab === 'deliverability')}
-        >
-          Deliverability
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('prospects')}
-          className={tabButtonClass(activeTab === 'prospects')}
-        >
-          Prospects
-        </button>
-        {role === 'ivera_admin' ? (
+      <div className="mb-6 rounded-xl border border-neutral-200/60 bg-white/70 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[10px] tracking-[0.18em] uppercase text-neutral-400">Core</span>
           <button
             type="button"
-            onClick={() => setActiveTab('editCampaign')}
-            className={tabButtonClass(activeTab === 'editCampaign')}
+            onClick={() => setActiveTab('outreach')}
+            className={tabButtonClass(activeTab === 'outreach')}
           >
-            Edit Campaign
+            Outreach
           </button>
-        ) : null}
+          <button
+            type="button"
+            onClick={() => setActiveTab('engagement')}
+            className={tabButtonClass(activeTab === 'engagement')}
+          >
+            Engagement
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('pipeline')}
+            className={tabButtonClass(activeTab === 'pipeline')}
+          >
+            Pipeline
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab('reporting'); void refreshReportingData() }}
+            className={tabButtonClass(activeTab === 'reporting')}
+          >
+            Revenue
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[10px] tracking-[0.18em] uppercase text-neutral-400">Analysis</span>
+          <button
+            type="button"
+            onClick={() => setActiveTab('leadQuality')}
+            className={secondaryTabButtonClass(activeTab === 'leadQuality')}
+          >
+            Lead Quality
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab('deliverability'); void refreshDeliverabilityData() }}
+            className={secondaryTabButtonClass(activeTab === 'deliverability')}
+          >
+            Deliverability
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('prospects')}
+            className={secondaryTabButtonClass(activeTab === 'prospects')}
+          >
+            Prospects
+          </button>
+          {role === 'ivera_admin' ? (
+            <button
+              type="button"
+              onClick={() => setActiveTab('editCampaign')}
+              className={`ml-auto ${secondaryTabButtonClass(activeTab === 'editCampaign')}`}
+            >
+              Edit Campaign
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {activeTab === 'editCampaign' ? (
