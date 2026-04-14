@@ -186,6 +186,9 @@ interface CampaignConfig {
   schedule_days?: string[]
   schedule_time_local?: string
   schedule_timezone?: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -210,6 +213,9 @@ interface CampaignDefinition {
   schedule_days?: string[]
   schedule_time_local?: string
   schedule_timezone?: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -1669,6 +1675,9 @@ export default function SalesDashboard() {
         schedule_days: selectedCampaignDefinition.schedule_days ?? ['tue', 'wed', 'thu'],
         schedule_time_local: selectedCampaignDefinition.schedule_time_local ?? '08:00',
         schedule_timezone: selectedCampaignDefinition.schedule_timezone ?? 'America/Vancouver',
+        contact_name: selectedCampaignDefinition.contact_name ?? null,
+        contact_email: selectedCampaignDefinition.contact_email ?? null,
+        contact_phone: selectedCampaignDefinition.contact_phone ?? null,
         sender_name: selectedCampaignDefinition.sender_name ?? null,
         sender_email: selectedCampaignDefinition.sender_email ?? null,
         reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
@@ -2263,6 +2272,9 @@ export default function SalesDashboard() {
             schedule_days: editingCampaign.schedule_days,
             schedule_time_local: editingCampaign.schedule_time_local,
             schedule_timezone: editingCampaign.schedule_timezone,
+            contact_name: editingCampaign.contact_name ?? null,
+            contact_email: editingCampaign.contact_email ?? null,
+            contact_phone: editingCampaign.contact_phone ?? null,
             sender_name: editingCampaign.sender_name ?? null,
             sender_email: editingCampaign.sender_email ?? null,
             reply_to_email: editingCampaign.reply_to_email ?? null,

@@ -15,6 +15,9 @@ export interface CampaignConfig {
   schedule_days?: string[]
   schedule_time_local?: string
   schedule_timezone?: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null
@@ -39,6 +42,9 @@ export interface CampaignDefinition {
   schedule_days?: string[]
   schedule_time_local?: string
   schedule_timezone?: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
   sender_name?: string | null
   sender_email?: string | null
   reply_to_email?: string | null

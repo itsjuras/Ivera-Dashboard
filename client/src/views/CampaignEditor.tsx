@@ -131,6 +131,9 @@ export default function CampaignEditor({
                     schedule_days: editingCampaign?.schedule_days || selectedCampaignDefinition?.schedule_days || ['tue', 'wed', 'thu'],
                     schedule_time_local: editingCampaign?.schedule_time_local || selectedCampaignDefinition?.schedule_time_local || '08:00',
                     schedule_timezone: editingCampaign?.schedule_timezone || selectedCampaignDefinition?.schedule_timezone || 'America/Vancouver',
+                    contact_name: editingCampaign?.contact_name || selectedCampaignDefinition?.contact_name || null,
+                    contact_email: editingCampaign?.contact_email || selectedCampaignDefinition?.contact_email || null,
+                    contact_phone: editingCampaign?.contact_phone || selectedCampaignDefinition?.contact_phone || null,
                     sender_name: editingCampaign?.sender_name || selectedCampaignDefinition?.sender_name || null,
                     sender_email: editingCampaign?.sender_email || selectedCampaignDefinition?.sender_email || null,
                     reply_to_email: editingCampaign?.reply_to_email || selectedCampaignDefinition?.reply_to_email || null,
@@ -324,8 +327,38 @@ export default function CampaignEditor({
                 </label>
                 <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4">
                   <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sender Settings</p>
-                  <p className="mt-1 text-xs text-neutral-500">Leave blank to use client-level defaults.</p>
+                  <p className="mt-1 text-xs text-neutral-500">Leave blank to use client-level defaults and fallbacks.</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Name</span>
+                      <input
+                        type="text"
+                        value={newCampaignDraft.contact_name ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, contact_name: event.target.value || null }))}
+                        placeholder="e.g. Alex from Ivera"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Email</span>
+                      <input
+                        type="email"
+                        value={newCampaignDraft.contact_email ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, contact_email: event.target.value || null }))}
+                        placeholder="e.g. alex@ivera.ca"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Phone</span>
+                      <input
+                        type="tel"
+                        value={newCampaignDraft.contact_phone ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, contact_phone: event.target.value || null }))}
+                        placeholder="e.g. +1 604 555 0100"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
                     <label className="space-y-2">
                       <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Sender Name</span>
                       <input
@@ -504,8 +537,38 @@ export default function CampaignEditor({
 
           <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
             <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sender Settings</p>
-            <p className="mt-1 text-xs text-neutral-500">Overrides the default sender for this campaign. Leave blank to use the client-level defaults.</p>
+            <p className="mt-1 text-xs text-neutral-500">Overrides the default sender for this campaign. Leave blank to use the client-level defaults and fallbacks.</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Name</span>
+                <input
+                  type="text"
+                  value={editingCampaign.contact_name ?? ''}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, contact_name: event.target.value || null } : current))}
+                  placeholder="e.g. Alex from Ivera"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Email</span>
+                <input
+                  type="email"
+                  value={editingCampaign.contact_email ?? ''}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, contact_email: event.target.value || null } : current))}
+                  placeholder="e.g. alex@ivera.ca"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Contact Phone</span>
+                <input
+                  type="tel"
+                  value={editingCampaign.contact_phone ?? ''}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, contact_phone: event.target.value || null } : current))}
+                  placeholder="e.g. +1 604 555 0100"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                />
+              </label>
               <label className="space-y-2">
                 <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Sender Name</span>
                 <input
