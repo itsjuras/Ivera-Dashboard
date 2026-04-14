@@ -2736,7 +2736,7 @@ export default function SalesDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div className="mx-auto max-w-7xl p-8 pb-28">
       <PageHeader
         title="Sales Agent"
         subtitle="Outbound campaign performance and prospect pipeline"
@@ -2799,73 +2799,6 @@ export default function SalesDashboard() {
       ) : null}
 
       <>
-      <div className="mb-6 rounded-xl border border-neutral-200/60 bg-white/70 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[10px] tracking-[0.18em] uppercase text-neutral-400">Core</span>
-          <button
-            type="button"
-            onClick={() => setActiveTab('outreach')}
-            className={tabButtonClass(activeTab === 'outreach')}
-          >
-            Outreach
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('engagement')}
-            className={tabButtonClass(activeTab === 'engagement')}
-          >
-            Engagement
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('pipeline')}
-            className={tabButtonClass(activeTab === 'pipeline')}
-          >
-            Pipeline
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('reporting'); void refreshReportingData() }}
-            className={tabButtonClass(activeTab === 'reporting')}
-          >
-            Revenue
-          </button>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[10px] tracking-[0.18em] uppercase text-neutral-400">Analysis</span>
-          <button
-            type="button"
-            onClick={() => setActiveTab('leadQuality')}
-            className={secondaryTabButtonClass(activeTab === 'leadQuality')}
-          >
-            Lead Quality
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('deliverability'); void refreshDeliverabilityData() }}
-            className={secondaryTabButtonClass(activeTab === 'deliverability')}
-          >
-            Deliverability
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('prospects')}
-            className={secondaryTabButtonClass(activeTab === 'prospects')}
-          >
-            Prospects
-          </button>
-          {role === 'ivera_admin' ? (
-            <button
-              type="button"
-              onClick={() => setActiveTab('editCampaign')}
-              className={`ml-auto ${secondaryTabButtonClass(activeTab === 'editCampaign')}`}
-            >
-              Edit Campaign
-            </button>
-          ) : null}
-        </div>
-      </div>
-
       {activeTab === 'editCampaign' ? (
         <Suspense fallback={<div className="py-16 text-center text-sm text-neutral-400">Loading campaign editor…</div>}>
           <LazyCampaignEditor
@@ -4582,6 +4515,70 @@ export default function SalesDashboard() {
         </div>
       )}
       </>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200/80 bg-white/90 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 py-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+            <button
+              type="button"
+              onClick={() => setActiveTab('outreach')}
+              className={tabButtonClass(activeTab === 'outreach')}
+            >
+              Outreach
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('engagement')}
+              className={tabButtonClass(activeTab === 'engagement')}
+            >
+              Engagement
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pipeline')}
+              className={tabButtonClass(activeTab === 'pipeline')}
+            >
+              Pipeline
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('reporting'); void refreshReportingData() }}
+              className={tabButtonClass(activeTab === 'reporting')}
+            >
+              Revenue
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('leadQuality')}
+              className={secondaryTabButtonClass(activeTab === 'leadQuality')}
+            >
+              Lead Quality
+            </button>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('deliverability'); void refreshDeliverabilityData() }}
+              className={secondaryTabButtonClass(activeTab === 'deliverability')}
+            >
+              Deliverability
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('prospects')}
+              className={secondaryTabButtonClass(activeTab === 'prospects')}
+            >
+              Prospects
+            </button>
+            {role === 'ivera_admin' ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('editCampaign')}
+                className={secondaryTabButtonClass(activeTab === 'editCampaign')}
+              >
+                Edit Campaign
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
       {selectedLeadId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 px-4 py-8">
           <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl">
