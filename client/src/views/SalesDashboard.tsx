@@ -2367,6 +2367,7 @@ export default function SalesDashboard() {
         method: 'POST',
         signal: controller.signal,
         body: JSON.stringify({
+          campaign_definition_id: editingCampaign.id,
           admin_input: reassessInput.trim() || undefined,
         }),
       })
