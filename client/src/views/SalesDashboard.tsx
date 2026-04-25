@@ -193,6 +193,7 @@ interface CampaignConfig {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
+  website_url?: string | null
 }
 
 interface CampaignDefinition {
@@ -220,6 +221,7 @@ interface CampaignDefinition {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
+  website_url?: string | null
 }
 
 interface CampaignAnalytics {
@@ -1325,6 +1327,7 @@ function buildValidatedCampaignPayload(campaign: CampaignConfig): { payload: Rec
       sender_email: campaign.sender_email ?? null,
       reply_to_email: campaign.reply_to_email ?? null,
       cal_booking_url: campaign.cal_booking_url ?? null,
+      website_url: campaign.website_url ?? null,
     },
     error: null,
   }
@@ -1379,6 +1382,7 @@ export default function SalesDashboard() {
     title: string
     requestedLeadCount: number | null
     campaignId: string | null
+    campaignDefinitionId: string | null
     completedAt: number | null
   } | null>(null)
   const [runTimerNow, setRunTimerNow] = useState(Date.now())
@@ -1710,13 +1714,16 @@ export default function SalesDashboard() {
 
     setGraphCampaignIds((current) => {
       const filtered = current.filter((id) => availableIds.includes(id))
-      if (selectedCampaignId && availableIds.includes(selectedCampaignId)) {
-        if (filtered.includes(selectedCampaignId)) return filtered
-        return [selectedCampaignId, ...filtered]
-      }
       return filtered.length ? filtered : [availableIds[0]]
     })
-  }, [selectableGraphCampaigns, selectedCampaignId])
+  }, [selectableGraphCampaigns])
+
+  useEffect(() => {
+    if (!selectedCampaignId) return
+    const availableIds = selectableGraphCampaigns.map((campaign) => campaign.id)
+    if (!availableIds.includes(selectedCampaignId)) return
+    setGraphCampaignIds([selectedCampaignId])
+  }, [selectedCampaignId, selectableGraphCampaigns])
 
   useEffect(() => {
     if (!selectedCampaignDefinition) {
@@ -1747,6 +1754,7 @@ export default function SalesDashboard() {
         sender_email: selectedCampaignDefinition.sender_email ?? null,
         reply_to_email: selectedCampaignDefinition.reply_to_email ?? null,
         cal_booking_url: selectedCampaignDefinition.cal_booking_url ?? null,
+        website_url: selectedCampaignDefinition.website_url ?? null,
       }
     })
     setCampaignAssessment(null)
@@ -1843,7 +1851,16 @@ export default function SalesDashboard() {
     )
   }, [campaigns, pendingRun])
   const pendingRunProgress = useMemo(
-    () => (pendingRun ? buildLiveRunProgress(matchingPendingCampaign, pendingRun.startedAt, pendingRun.requestedLeadCount, runTimerNow) : null),
+    () => (
+      pendingRun
+        ? buildLiveRunProgress(
+          matchingPendingCampaign ?? null,
+          pendingRun.startedAt,
+          pendingRun.requestedLeadCount,
+          runTimerNow,
+        )
+        : null
+    ),
     [matchingPendingCampaign, pendingRun, runTimerNow],
   )
   const activeCampaign = useMemo(
@@ -1866,7 +1883,8 @@ export default function SalesDashboard() {
   const liveCampaign = matchingPendingCampaign ?? activeCampaign
   const liveCampaignProgress = pendingRunProgress ?? activeCampaignProgress
   const hasActiveCampaign = campaigns.some((campaign) => campaign.status === 'active')
-  const runStartDisabled = runningCampaign || savingCampaign || hasActiveCampaign
+  const hasPendingCampaign = Boolean(pendingRun)
+  const runStartDisabled = runningCampaign || savingCampaign || hasActiveCampaign || hasPendingCampaign
   const latestCampaignRuns = useMemo(
     () => {
       const rows = campaigns.map((campaign) => ({
@@ -1931,10 +1949,16 @@ export default function SalesDashboard() {
     [selectedRun],
   )
   const selectedCampaignHasLiveRun = Boolean(
-    liveCampaign
-    && selectedCampaignDefinition
-    && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id,
+    selectedCampaignDefinition
+    && (
+      (liveCampaign && liveCampaign.campaign_definition_id === selectedCampaignDefinition.id)
+      || (pendingRun && pendingRun.campaignDefinitionId === selectedCampaignDefinition.id)
+    ),
   )
+  const selectedCampaignStatus = selectedCampaignDefinition?.status || null
+  const selectedCampaignIsActive = selectedCampaignStatus === 'active'
+  const selectedCampaignIsPaused = selectedCampaignStatus === 'paused'
+  const selectedCampaignIsArchived = selectedCampaignStatus === 'archived'
   const selectedCampaignRuns = useMemo(() => {
     if (!selectedCampaignDefinition) {
       if (campaignRunFilter === 'all') return latestCampaignRuns
@@ -2300,6 +2324,7 @@ export default function SalesDashboard() {
         title: selectedCampaignDefinition?.product_name || 'Campaign run',
         requestedLeadCount: requestedLeadCount ?? null,
         campaignId: null,
+        campaignDefinitionId: definitionId,
         completedAt: null,
       })
       setRunTimerNow(startedAt)
@@ -2464,6 +2489,7 @@ export default function SalesDashboard() {
         contact_name: null,
         contact_email: null,
         contact_phone: null,
+        website_url: null,
       })
       setSelectedCampaignId(data.campaign.id)
       setAdminActionMessage(data.message || 'Campaign created.')
@@ -2713,6 +2739,8 @@ export default function SalesDashboard() {
   }
 
   guidedOpsCards.sort((a, b) => a.priority - b.priority)
+  const showCampaignRail = role === 'ivera_admin' && (activeTab === 'outreach' || activeTab === 'editCampaign')
+  const campaignRailDefinitions = campaignDefinitions.filter((campaign) => campaign.status !== 'archived')
 
   if (!stats && !error) {
     return (
@@ -2799,6 +2827,76 @@ export default function SalesDashboard() {
         </div>
       ) : null}
 
+      <div className={showCampaignRail ? 'grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start' : ''}>
+      {showCampaignRail ? (
+        <aside className="rounded-xl border border-neutral-200/60 bg-white/70 p-3 lg:sticky lg:top-24">
+          <div className="px-1 pb-2">
+            <p className="text-[10px] tracking-[0.2em] uppercase text-neutral-400">Campaigns</p>
+            <p className="mt-1 text-xs text-neutral-500">Select a campaign to switch this whole view.</p>
+          </div>
+          <div className="space-y-2">
+            {campaignRailDefinitions.map((campaign) => {
+              const analytics = campaignAnalyticsByDefinition.get(campaign.id) ?? null
+              const isSelected = selectedCampaignId === campaign.id
+              const runCount = campaign.total_runs ?? analytics?.totalRuns ?? 0
+              return (
+                <button
+                  key={campaign.id}
+                  type="button"
+                  onClick={() => setSelectedCampaignId(campaign.id)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                    isSelected
+                      ? 'border-neutral-900 bg-neutral-900 text-white'
+                      : 'border-neutral-200 bg-white/80 hover:border-neutral-300'
+                  }`}
+                >
+                  <p className={`truncate text-xs font-semibold tracking-[0.14em] uppercase ${isSelected ? 'text-white' : 'text-neutral-900'}`}>
+                    {campaign.name}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${isSelected ? 'bg-white/15 text-white' : (statusColors[campaign.status] ?? statusColors.paused)}`}>
+                      {campaign.status}
+                    </span>
+                    <span className={`text-[10px] uppercase tracking-[0.16em] ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}>
+                      {runCount} runs
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('editCampaign')
+                setShowNewCampaignForm(true)
+              }}
+              className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white"
+            >
+              Add Campaign
+            </button>
+            {activeTab === 'outreach' ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('editCampaign')}
+                className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+              >
+                Edit Selected
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setActiveTab('outreach')}
+                className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+              >
+                View Outreach
+              </button>
+            )}
+          </div>
+        </aside>
+      ) : null}
+      <div className={showCampaignRail ? 'min-w-0' : ''}>
       <>
       {activeTab === 'editCampaign' ? (
         <Suspense fallback={<div className="py-16 text-center text-sm text-neutral-400">Loading campaign editor…</div>}>
@@ -2840,6 +2938,7 @@ export default function SalesDashboard() {
             onSetDefault={setDefaultCampaign}
             onCreateCampaign={createCampaignDefinition}
             onCampaignAction={handleCampaignAction}
+            externalCampaignPicker={showCampaignRail}
           />
         </Suspense>
       ) : activeTab === 'outreach' ? (
@@ -2907,46 +3006,6 @@ export default function SalesDashboard() {
                     ) : null}
                   </div>
                 ) : null}
-                <div className="flex flex-wrap items-center gap-2">
-                  {[7, 14, 30].map((days) => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => setOverviewDays(days as OverviewDays)}
-                      className={tabButtonClass(overviewDays === days)}
-                    >
-                      {days}d
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setOverviewDays(0)}
-                    className={tabButtonClass(overviewDays === 0)}
-                  >
-                    All Time
-                  </button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
-                    <SlidersHorizontal size={12} />
-                    Layers
-                  </span>
-                  {layerOptions.map((layer) => (
-                    <button
-                      key={layer.key}
-                      type="button"
-                      onClick={() =>
-                        setChartLayers((current) => ({
-                          ...current,
-                          [layer.key]: !current[layer.key],
-                        }))
-                      }
-                      className={tabButtonClass(chartLayers[layer.key])}
-                    >
-                      {layer.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
@@ -2984,6 +3043,48 @@ export default function SalesDashboard() {
                   {chartLayers.unsubscribed && <Bar dataKey="unsubscribed" stackId="activity" fill="#fca5a5" radius={[4, 4, 0, 0]} />}
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {[7, 14, 30].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setOverviewDays(days as OverviewDays)}
+                  className={tabButtonClass(overviewDays === days)}
+                >
+                  {days}d
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setOverviewDays(0)}
+                className={tabButtonClass(overviewDays === 0)}
+              >
+                All Time
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 text-[11px] tracking-widest uppercase text-neutral-400">
+                <SlidersHorizontal size={12} />
+                Layers
+              </span>
+              {layerOptions.map((layer) => (
+                <button
+                  key={layer.key}
+                  type="button"
+                  onClick={() =>
+                    setChartLayers((current) => ({
+                      ...current,
+                      [layer.key]: !current[layer.key],
+                    }))
+                  }
+                  className={tabButtonClass(chartLayers[layer.key])}
+                >
+                  {layer.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -3232,23 +3333,28 @@ export default function SalesDashboard() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation()
-                              void handleCampaignAction(campaign.id, 'pause')
+                              void handleCampaignAction(campaign.id, campaign.status === 'active' ? 'pause' : 'restart')
                             }}
-                            disabled={savingCampaign || campaign.status !== 'active'}
+                            disabled={
+                              savingCampaign
+                              || runningCampaign
+                              || campaign.status === 'archived'
+                              || (campaign.status !== 'active' && hasActiveCampaign)
+                            }
                             className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Pause
+                            {campaign.status === 'active' ? 'Pause' : 'Activate'}
                           </button>
                           <button
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation()
-                              void handleCampaignAction(campaign.id, 'restart')
+                              void handleCampaignAction(campaign.id, 'cancel')
                             }}
-                            disabled={savingCampaign || runningCampaign || hasActiveCampaign || campaign.status === 'archived'}
+                            disabled={savingCampaign || campaign.status !== 'active'}
                             className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Run Again
+                            Cancel Active Run
                           </button>
                           <button
                             type="button"
@@ -3285,39 +3391,6 @@ export default function SalesDashboard() {
                             Health {selectedCampaignAnalytics.healthScore}/100
                           </span>
                         ) : null}
-                        <button
-                          type="button"
-                          onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
-                          disabled={
-                            selectedCampaignDefinition.status === 'archived'
-                            || runningCampaign
-                            || savingCampaign
-                            || hasActiveCampaign
-                          }
-                          className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {hasActiveCampaign ? 'Run Locked' : 'Run Campaign'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, selectedCampaignHasLiveRun ? 'cancel' : 'pause')}
-                          disabled={savingCampaign || (!selectedCampaignHasLiveRun && selectedCampaignDefinition.status !== 'active')}
-                          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] disabled:cursor-not-allowed disabled:opacity-50 ${
-                            selectedCampaignHasLiveRun
-                              ? 'border-red-200 bg-red-50 text-red-700'
-                              : 'border-neutral-200 bg-white text-neutral-700'
-                          }`}
-                        >
-                          {selectedCampaignHasLiveRun ? 'Cancel Active Run' : 'Pause'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'restart')}
-                          disabled={savingCampaign || runningCampaign || hasActiveCampaign || selectedCampaignDefinition.status === 'archived'}
-                          className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Run Again
-                        </button>
                       </div>
                     </div>
 
@@ -3351,11 +3424,14 @@ export default function SalesDashboard() {
                               || runningCampaign
                               || savingCampaign
                               || hasActiveCampaign
+                              || hasPendingCampaign
                             }
                             className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {hasActiveCampaign
                               ? 'Run Locked'
+                              : hasPendingCampaign
+                                ? 'Starting…'
                               : hasManualOverride
                                 ? `Run ${Math.round(parsedManualOverride)} Leads`
                                 : 'Run Campaign'}
@@ -3365,6 +3441,8 @@ export default function SalesDashboard() {
                       <p className="mt-2 text-[11px] text-neutral-500">
                         {hasActiveCampaign
                           ? 'A run is already active. Cancel it here or wait for it to finish before starting another one.'
+                          : hasPendingCampaign
+                            ? 'Campaign start accepted. Live status is initializing now.'
                           : `Default run size is ${selectedCampaignDefinition.num_leads_per_run} leads.`}
                       </p>
                     </div>
@@ -3374,22 +3452,14 @@ export default function SalesDashboard() {
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <p className="text-[11px] tracking-widest uppercase text-emerald-700">Live Run</p>
-                            <p className="mt-1 text-sm font-semibold text-neutral-900">{pendingRun?.title || formatCampaignRunTitle(liveCampaign!)}</p>
+                            <p className="mt-1 text-sm font-semibold text-neutral-900">
+                              {pendingRun?.title || (liveCampaign ? formatCampaignRunTitle(liveCampaign) : 'Campaign run')}
+                            </p>
                             <p className="mt-1 text-xs text-neutral-600">{liveCampaignProgress.summary}</p>
                           </div>
                           <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-emerald-700">
                             {liveCampaignProgress.badge}
                           </span>
-                        </div>
-                        <div className="mt-3 flex justify-start">
-                          <button
-                            type="button"
-                            onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'cancel')}
-                            disabled={savingCampaign}
-                            className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Cancel Active Run
-                          </button>
                         </div>
                         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/90">
                           <div
@@ -3407,6 +3477,55 @@ export default function SalesDashboard() {
                         </div>
                       </div>
                     ) : null}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleRunCampaign(selectedCampaignDefinition.id)}
+                        disabled={
+                          selectedCampaignDefinition.status === 'archived'
+                          || runningCampaign
+                          || savingCampaign
+                          || hasActiveCampaign
+                          || hasPendingCampaign
+                        }
+                        className="rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {hasActiveCampaign ? 'Run Locked' : hasPendingCampaign ? 'Starting…' : 'Run Campaign'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCampaignAction(
+                          selectedCampaignDefinition.id,
+                          selectedCampaignIsActive ? 'pause' : 'restart',
+                        )}
+                        disabled={
+                          savingCampaign
+                          || runningCampaign
+                          || selectedCampaignIsArchived
+                          || (selectedCampaignIsPaused && hasActiveCampaign)
+                        }
+                        className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {selectedCampaignIsActive ? 'Pause' : 'Activate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'cancel')}
+                        disabled={savingCampaign || !selectedCampaignIsActive || !selectedCampaignHasLiveRun}
+                        className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancel Active Run
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCampaignAction(selectedCampaignDefinition.id, 'archive')}
+                        disabled={savingCampaign || selectedCampaignIsArchived}
+                        className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Archive
+                      </button>
+                    </div>
 
                     {selectedCampaignAnalytics ? (
                       <>
@@ -4516,6 +4635,8 @@ export default function SalesDashboard() {
         </div>
       )}
       </>
+      </div>
+      </div>
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200/80 bg-white/90 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-3">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">

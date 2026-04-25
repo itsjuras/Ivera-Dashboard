@@ -7,6 +7,89 @@ import {
 } from './salesUtils'
 import { healthTone, replyRate, type CampaignAnalytics } from './salesAnalytics'
 
+const TARGET_SECTION_HEADINGS = [
+  'OVERVIEW',
+  'HIGH-PRIORITY SEGMENTS',
+  'SECONDARY SEGMENTS',
+  'SIGNALS TO TARGET',
+  'REFERRAL PROGRAM',
+  'GEOGRAPHIC PRIORITY',
+  'MESSAGING ANGLES BY PRODUCT',
+  'REASSESSMENT NOTES',
+] as const
+
+function normalizeHeading(value: string) {
+  return String(value || '')
+    .replace(/[:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+}
+
+function extractSectionBody(source: string | null | undefined, heading: string) {
+  const lines = String(source || '').split('\n')
+  const known = new Set(TARGET_SECTION_HEADINGS.map((value) => normalizeHeading(value)))
+  const target = normalizeHeading(heading)
+  const collected: string[] = []
+  let capture = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const normalized = normalizeHeading(trimmed)
+    if (!capture && normalized === target) {
+      capture = true
+      continue
+    }
+    if (capture && trimmed && known.has(normalized)) break
+    if (capture) collected.push(line)
+  }
+
+  return collected.join('\n').trim()
+}
+
+function upsertSection(source: string | null | undefined, heading: string, body: string) {
+  const text = String(source || '').trim()
+  const normalizedHeading = normalizeHeading(heading)
+  const known = new Set(TARGET_SECTION_HEADINGS.map((value) => normalizeHeading(value)))
+  const lines = text ? text.split('\n') : []
+  const kept: string[] = []
+  let skip = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const normalized = normalizeHeading(trimmed)
+    if (!skip && normalized === normalizedHeading) {
+      skip = true
+      continue
+    }
+    if (skip && trimmed && known.has(normalized)) {
+      skip = false
+    }
+    if (!skip) kept.push(line)
+  }
+
+  const cleanedBody = String(body || '').trim()
+  if (!cleanedBody) return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+
+  const sectionBlock = `${heading}\n${cleanedBody}`
+  const anchor = kept.findIndex((line) => {
+    const normalized = normalizeHeading(line.trim())
+    return normalized === 'GEOGRAPHIC PRIORITY' || normalized === 'REASSESSMENT NOTES'
+  })
+
+  if (anchor >= 0) {
+    const before = kept.slice(0, anchor).join('\n').trim()
+    const after = kept.slice(anchor).join('\n').trim()
+    return [before, sectionBlock, after].filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim()
+  }
+
+  return [kept.join('\n').trim(), sectionBlock]
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const SCHEDULE_DAY_OPTIONS = [
   { value: 'mon', label: 'Mon' },
   { value: 'tue', label: 'Tue' },
@@ -21,6 +104,11 @@ const SCHEDULE_TIMEZONE_OPTIONS = [
   { value: 'America/Winnipeg', label: 'Central' },
   { value: 'America/Toronto', label: 'Eastern' },
 ] as const
+
+const REFERRAL_PROGRAM_TEMPLATE = `- Wedding planners and venues can resell Ivera Stream to their clients.
+- We provide special partner pricing per order.
+- Partners keep all margin above partner pricing as profit.
+- Include a simple onboarding CTA for referral partners.`
 
 interface CampaignEditorProps {
   role: string
@@ -60,6 +148,7 @@ interface CampaignEditorProps {
   onSetDefault: (definitionId: string) => Promise<void>
   onCreateCampaign: () => Promise<void>
   onCampaignAction?: (definitionId: string, action: 'pause' | 'restart' | 'archive') => Promise<void>
+  externalCampaignPicker?: boolean
 }
 
 export default function CampaignEditor({
@@ -83,6 +172,7 @@ export default function CampaignEditor({
   onOpenReassessModal,
   onSetDefault,
   onCreateCampaign,
+  externalCampaignPicker = false,
 }: CampaignEditorProps) {
   function campaignDisplayStatus(campaign: CampaignDefinition, analytics: CampaignAnalytics | null) {
     if (campaign.status === 'paused' && (analytics?.totalRuns ?? campaign.total_runs ?? 0) === 0) {
@@ -105,6 +195,16 @@ export default function CampaignEditor({
     return next.length ? next : ['tue', 'wed', 'thu']
   }
 
+  const newCampaignReferralProgram = React.useMemo(
+    () => extractSectionBody(newCampaignDraft.target_description, 'REFERRAL PROGRAM'),
+    [newCampaignDraft.target_description],
+  )
+
+  const editingCampaignReferralProgram = React.useMemo(
+    () => extractSectionBody(editingCampaign?.target_description, 'REFERRAL PROGRAM'),
+    [editingCampaign?.target_description],
+  )
+
   return (
     <div className="space-y-6">
       {role === 'ivera_admin' ? (
@@ -115,7 +215,9 @@ export default function CampaignEditor({
                 <p className="text-[11px] tracking-widest uppercase text-neutral-400">Campaign Setup</p>
                 <h3 className="mt-1 text-sm font-semibold text-neutral-900">Choose the campaign you want to configure</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Use Outreach to run and monitor campaigns. This view is only for campaign settings and defaults.
+                  {externalCampaignPicker
+                    ? 'Use the campaign list on the left to switch context. This view edits the selected campaign.'
+                    : 'Use Outreach to run and monitor campaigns. This view is only for campaign settings and defaults.'}
                 </p>
               </div>
               <button
@@ -138,6 +240,7 @@ export default function CampaignEditor({
                     sender_email: editingCampaign?.sender_email || selectedCampaignDefinition?.sender_email || null,
                     reply_to_email: editingCampaign?.reply_to_email || selectedCampaignDefinition?.reply_to_email || null,
                     cal_booking_url: editingCampaign?.cal_booking_url || selectedCampaignDefinition?.cal_booking_url || null,
+                    website_url: editingCampaign?.website_url || selectedCampaignDefinition?.website_url || null,
                   })
                 }}
                 className="inline-flex items-center gap-2 rounded-full border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-neutral-800"
@@ -147,11 +250,12 @@ export default function CampaignEditor({
               </button>
             </div>
 
-            {campaignsLoading ? (
-              <p className="mt-4 text-sm text-neutral-500">Loading campaigns...</p>
-            ) : (
-              <div className="mt-5 grid gap-3 lg:grid-cols-2">
-                {campaignDefinitions.map((campaign) => (
+            {!externalCampaignPicker ? (
+              campaignsLoading ? (
+                <p className="mt-4 text-sm text-neutral-500">Loading campaigns...</p>
+              ) : (
+                <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                  {campaignDefinitions.map((campaign) => (
                   (() => {
                     const analytics = campaignAnalyticsByDefinition?.get(campaign.id) ?? null
                     const displayStatus = campaignDisplayStatus(campaign, analytics)
@@ -224,9 +328,10 @@ export default function CampaignEditor({
                       </div>
                     )
                   })()
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )
+            ) : null}
 
             {showNewCampaignForm ? (
               <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
@@ -325,6 +430,29 @@ export default function CampaignEditor({
                     className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
                   />
                 </label>
+                <label className="mt-3 block space-y-2">
+                  <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Referral Program</span>
+                  <textarea
+                    value={newCampaignReferralProgram}
+                    onChange={(event) => setNewCampaignDraft((current) => ({
+                      ...current,
+                      target_description: upsertSection(current.target_description, 'REFERRAL PROGRAM', event.target.value),
+                    }))}
+                    rows={5}
+                    placeholder="Define partner pricing and resale terms for wedding planners and venues."
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNewCampaignDraft((current) => ({
+                      ...current,
+                      target_description: upsertSection(current.target_description, 'REFERRAL PROGRAM', newCampaignReferralProgram || REFERRAL_PROGRAM_TEMPLATE),
+                    }))}
+                    className="w-fit rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+                  >
+                    Insert Template
+                  </button>
+                </label>
                 <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4">
                   <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sender Settings</p>
                   <p className="mt-1 text-xs text-neutral-500">Leave blank to use client-level defaults and fallbacks.</p>
@@ -396,6 +524,16 @@ export default function CampaignEditor({
                         value={newCampaignDraft.cal_booking_url ?? ''}
                         onChange={(event) => setNewCampaignDraft((current) => ({ ...current, cal_booking_url: event.target.value || null }))}
                         placeholder="e.g. https://cal.com/yourname"
+                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Website</span>
+                      <input
+                        type="url"
+                        value={newCampaignDraft.website_url ?? ''}
+                        onChange={(event) => setNewCampaignDraft((current) => ({ ...current, website_url: event.target.value || null }))}
+                        placeholder="e.g. https://streaming.ivera.ca"
                         className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
                       />
                     </label>
@@ -534,6 +672,37 @@ export default function CampaignEditor({
               className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition focus:border-neutral-400"
             />
           </label>
+          <label className="mt-3 block space-y-2">
+            <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Referral Program</span>
+            <textarea
+              value={editingCampaignReferralProgram}
+              onChange={(event) => setEditingCampaign((current) => (
+                current
+                  ? {
+                    ...current,
+                    target_description: upsertSection(current.target_description, 'REFERRAL PROGRAM', event.target.value),
+                  }
+                  : current
+              ))}
+              rows={5}
+              placeholder="Define partner pricing and resale terms for wedding planners and venues."
+              className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+            />
+            <button
+              type="button"
+              onClick={() => setEditingCampaign((current) => (
+                current
+                  ? {
+                    ...current,
+                    target_description: upsertSection(current.target_description, 'REFERRAL PROGRAM', editingCampaignReferralProgram || REFERRAL_PROGRAM_TEMPLATE),
+                  }
+                  : current
+              ))}
+              className="w-fit rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-700"
+            >
+              Insert Template
+            </button>
+          </label>
 
           <div className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
             <p className="text-[11px] tracking-widest uppercase text-neutral-400">Sender Settings</p>
@@ -606,6 +775,16 @@ export default function CampaignEditor({
                   value={editingCampaign.cal_booking_url ?? ''}
                   onChange={(event) => setEditingCampaign((current) => (current ? { ...current, cal_booking_url: event.target.value || null } : current))}
                   placeholder="e.g. https://cal.com/yourname"
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="block text-[11px] tracking-widest uppercase text-neutral-400">Website</span>
+                <input
+                  type="url"
+                  value={editingCampaign.website_url ?? ''}
+                  onChange={(event) => setEditingCampaign((current) => (current ? { ...current, website_url: event.target.value || null } : current))}
+                  placeholder="e.g. https://streaming.ivera.ca"
                   className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
                 />
               </label>

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Phone, Building2, Hash, Calendar, Mail, UserPlus } from 'lucide-react'
-import SpendTrackerPanel from '../components/admin/SpendTrackerPanel'
 import {
   fetchCustomers,
   fetchPlans,
@@ -331,10 +330,6 @@ export default function AdminDashboard() {
 
       {/* Main panel */}
       <div className="flex-1 overflow-y-auto px-8 py-8">
-        <div className="mb-6 max-w-6xl">
-          <SpendTrackerPanel />
-        </div>
-
         {error && (
           <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center justify-between">
             {error}

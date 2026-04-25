@@ -22,6 +22,7 @@ export interface CampaignConfig {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
+  website_url?: string | null
 }
 
 export interface CampaignDefinition {
@@ -49,6 +50,7 @@ export interface CampaignDefinition {
   sender_email?: string | null
   reply_to_email?: string | null
   cal_booking_url?: string | null
+  website_url?: string | null
 }
 
 export interface CampaignAnalytics {
